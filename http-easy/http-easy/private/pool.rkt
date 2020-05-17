@@ -23,7 +23,7 @@
 (struct pool-config (max-size)
   #:transparent)
 
-(define/contract (make-pool-config #:max-size [max-size +inf.0])
+(define/contract (make-pool-config #:max-size [max-size 128])
   (->* ()
        (#:max-size (or/c +inf.0 exact-positive-integer?))
        pool-config?)
