@@ -8,26 +8,48 @@
          "timeout.rkt")
 
 (provide
+ make-pool-config
+ pool-config?
+
+ connector/c
  make-pool
  pool?
  pool-lease
  pool-release
  pool-shutdown!)
 
+;; config ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(struct pool-config (max-size)
+  #:transparent)
+
+(define/contract (make-pool-config #:max-size [max-size +inf.0])
+  (->* ()
+       (#:max-size (or/c +inf.0 exact-positive-integer?))
+       pool-config?)
+  (pool-config max-size))
+
+
+;; pool ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define connector/c
+  (-> http-conn? http-conn?))
+
 (struct pool (custodian connector mgr)
   #:transparent)
 
-(define (make-pool max-size connector)
+(define/contract (make-pool config connector)
+  (-> pool-config? connector/c pool?)
   (define custodian (make-custodian))
   (parameterize ([current-custodian custodian])
-    (pool custodian connector (make-pool-manager max-size))))
+    (pool custodian connector (make-pool-manager config))))
 
 ;; TODO: Idle timeouts.
-(define (make-pool-manager max-size)
+(define (make-pool-manager conf)
   (thread
    (lambda ()
-     (define released-evt
-       (make-semaphore))
+     (define max-size (pool-config-max-size conf))
+     (define released-evt (make-semaphore))
 
      (let loop ([conns  null]
                 [active null]
@@ -89,6 +111,7 @@
 (define-syntax-rule (send p msg arg ...)
   (thread-send (pool-mgr p) (list 'msg arg ...)))
 
+;; TODO: Handle breaks.
 (define/contract (pool-lease p [t #f])
   (->* (pool?) ((or/c false/c timeout-config?)) http-conn?)
   (define ch (make-channel))

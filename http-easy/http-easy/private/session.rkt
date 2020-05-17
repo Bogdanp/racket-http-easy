@@ -13,6 +13,7 @@
          "timeout.rkt")
 
 (provide
+ method/c
  make-session
  session?
  session-shutdown!
@@ -24,14 +25,11 @@
 (struct session (pool)
   #:transparent)
 
-(define/contract (make-session url-or-string
-                               #:pool-size [pool-size 8])
-  (->* ((or/c string? url?))
-       (#:pool-size exact-positive-integer?)
-       session?)
+(define/contract (make-session url-or-string [conf (make-pool-config)])
+  (->* ((or/c string? url?)) (pool-config?) session?)
   (define u (if (url? url-or-string) url-or-string (string->url url-or-string)))
   (define connector (make-url-connector u))
-  (define pool (make-pool pool-size connector))
+  (define pool (make-pool conf connector))
   (define s (session pool))
   (begin0 s
     (will-register executor s session-shutdown!)
@@ -66,7 +64,7 @@
       [else (string-append path "?" (alist->form-urlencoded params))]))
 
   (let loop ([attempts 1])
-    (define conn (pool-lease (session-pool s)))
+    (define conn (pool-lease (session-pool s) timeouts))
     (with-handlers ([exn:fail?
                      (lambda (e)
                        (log-http-easy-warning "connection failed: ~a" (exn-message e))
@@ -120,12 +118,8 @@
     (if (http-conn-live? conn)
         (http-conn-enliven! conn)
         (http-conn-open! conn h
-                         #:port (or p (case s
-                                        [("https") 443]
-                                        [else      80]))
-                         #:ssl? (case s
-                                  [("https") #t]
-                                  [else      #f])
+                         #:port (or p (if (equal? s "https") 443 80))
+                         #:ssl? (equal? s "https")
                          #:auto-reconnect? #t))))
 
 (define (headers->list headers)

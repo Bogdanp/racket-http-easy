@@ -16,13 +16,13 @@
     "pool-lease"
 
     (test-case "leases connections from the pool"
-      (define p (make-pool 1 values))
+      (define p (make-pool (make-pool-config #:max-size 1) values))
       (define c (pool-lease p))
       (check-true (http-conn? c))
       (pool-release p c))
 
     (test-case "leases connections from the pool to waiters"
-      (define p (make-pool 1 values))
+      (define p (make-pool (make-pool-config #:max-size 1) values))
       (define c1 (pool-lease p))
       (define c2 #f)
       (define thd
@@ -36,9 +36,10 @@
 
     (test-case "times out when no connections take too long"
       (define p
-        (make-pool 1 (lambda (c)
-                       (begin0 c
-                         (sleep 10)))))
+        (make-pool (make-pool-config #:max-size 1)
+                   (lambda (c)
+                     (begin0 c
+                       (sleep 10)))))
 
       (check-exn
        (lambda (e)
@@ -48,7 +49,7 @@
          (pool-lease p (make-timeout-config #:connect 0.01)))))
 
     (test-case "times out when no connections are available"
-      (define p (make-pool 1 values))
+      (define p (make-pool (make-pool-config #:max-size 1) values))
       (define c1 (pool-lease p))
       (check-exn
        (lambda (e)

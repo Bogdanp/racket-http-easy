@@ -3,7 +3,6 @@
 (require (for-syntax racket/base
                      syntax/parse)
          net/url
-         racket/contract
          "http-easy/private/common.rkt"
          "http-easy/private/error.rkt"
          "http-easy/private/response.rkt"
