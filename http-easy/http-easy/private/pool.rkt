@@ -132,7 +132,7 @@
           (lambda (c)
             (log-http-easy-warning "releasing orphan connection")
             (pool-release p c))))))
-     (raise (make-timeout-error 'pool))]))
+     (raise (make-timeout-error 'lease))]))
 
 (define/contract (pool-release p c)
   (-> pool? http-conn? void?)

@@ -53,7 +53,7 @@
       (check-exn
        (lambda (e)
          (and (exn:fail:http-easy:timeout? e)
-              (eq? (exn:fail:http-easy:timeout-kind e) 'pool)))
+              (eq? (exn:fail:http-easy:timeout-kind e) 'lease)))
        (lambda ()
          (pool-lease p (make-timeout-config #:lease 0.01))))
 
