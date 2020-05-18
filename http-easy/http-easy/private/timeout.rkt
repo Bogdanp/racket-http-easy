@@ -16,7 +16,7 @@
 (struct timeout-config (lease connect send)
   #:transparent)
 
-(define/contract (make-timeout-config #:lease [lease #f]
+(define/contract (make-timeout-config #:lease [lease 5]
                                       #:connect [connect 5]
                                       #:send [send 30])
   (->* ()
