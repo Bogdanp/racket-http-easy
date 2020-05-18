@@ -7,30 +7,39 @@
          "logger.rkt"
          "timeout.rkt")
 
-(provide
- make-pool-config
- pool-config?
+;; config ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(provide
+ limit/c
+ make-pool-config
+ pool-config?)
+
+(struct pool-config (max-size idle-timeout)
+  #:transparent)
+
+(define limit/c
+  (or/c +inf.0 exact-positive-integer?))
+
+(define/contract (make-pool-config
+                  #:max-size [max-size 128]
+                  #:idle-timeout [idle-timeout 600])
+  (->* ()
+       (#:max-size limit/c
+        #:idle-timeout timeout/c)
+       pool-config?)
+  (pool-config max-size
+               idle-timeout))
+
+
+;; pool ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(provide
  connector/c
  make-pool
  pool?
  pool-lease
  pool-release
- pool-shutdown!)
-
-;; config ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(struct pool-config (max-size)
-  #:transparent)
-
-(define/contract (make-pool-config #:max-size [max-size 128])
-  (->* ()
-       (#:max-size (or/c +inf.0 exact-positive-integer?))
-       pool-config?)
-  (pool-config max-size))
-
-
-;; pool ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ pool-close!)
 
 (define connector/c
   (-> http-conn? http-conn?))
@@ -44,25 +53,36 @@
   (parameterize ([current-custodian custodian])
     (pool custodian connector (make-pool-manager config))))
 
-;; TODO: Idle timeouts.
 (define (make-pool-manager conf)
   (thread
    (lambda ()
-     (define max-size (pool-config-max-size conf))
+     (match-define (pool-config max-size idle-timeout)
+       conf)
+
      (define released-evt (make-semaphore))
+     (define (make-deadline)
+       (+ (current-inexact-milliseconds)
+          (* idle-timeout 1000)))
 
      (let loop ([conns  null]
                 [active null]
                 [idle   null]
+                [deads  (hasheq)]
                 [waits  null])
+       (define idle-timeout-evt
+         (if (hash-empty? deads)
+             never-evt
+             (alarm-evt (apply min (hash-values deads)))))
+
        (sync
         (handle-evt
          (thread-receive-evt)
          (lambda (_)
            (match (thread-receive)
-             [(list 'shutdown)
-              (for-each http-conn-close! conns)
-              (log-http-easy-debug "pool manager shut down")]
+             [(list 'close)
+              (for ([(c _) (in-hash conns)])
+                (http-conn-close! c))
+              (log-http-easy-debug "pool manager stopped")]
 
              [(list 'lease ch)
               (cond
@@ -70,43 +90,72 @@
                  (log-http-easy-debug "leasing existing connection")
                  (define c (car idle))
                  (channel-put ch c)
-                 (loop conns (cons c active) (cdr idle) waits)]
+                 (loop conns (cons c active) (cdr idle) (hash-remove deads c) waits)]
 
                 [(< (length conns) max-size)
                  (log-http-easy-debug "leasing new connection")
                  (define c (http-conn))
                  (channel-put ch c)
-                 (loop (cons c conns) (cons c active) idle waits)]
+                 (loop (cons c conns) (cons c active) idle deads waits)]
 
                 [else
                  (log-http-easy-debug "no connections available at this time")
-                 (loop conns active idle (cons ch waits))])]
+                 (loop conns active idle deads (cons ch waits))])]
 
              [(list 'release c)
               (define new-active (remq c active))
               (cond
                 [(equal? active new-active)
                  (log-http-easy-warning "connection released multiple times")
-                 (loop conns active idle waits)]
+                 (loop conns active idle deads waits)]
 
                 [else
                  (log-http-easy-debug "connection released")
                  (semaphore-post released-evt)
-                 (loop conns new-active (cons c idle) waits)])])))
+                 (loop (cons c conns) new-active (cons c idle) (hash-set deads c (make-deadline)) waits)])])))
 
         (handle-evt
          released-evt
          (lambda (_)
            (cond
-             [(or (null? idle) (null? waits))
-              (loop conns active idle waits)]
+             [(null? waits)
+              (log-http-easy-debug "no waiters to lease connections to")
+              (loop conns active idle deads waits)]
+
+             [(null? idle)
+              (log-http-easy-debug "no connections to lease to waiters")
+              (loop conns active idle deads waits)]
 
              [else
               (log-http-easy-debug "leasing connection to waiter")
               (define ch (car waits))
               (define c (car idle))
               (channel-put ch c)
-              (loop conns (cons c active) (cdr idle) (cdr waits))]))))))))
+              (loop conns (cons c active) (cdr idle) (hash-remove deads c) (cdr waits))])))
+
+        (handle-evt
+         idle-timeout-evt
+         (lambda (_)
+           (log-http-easy-debug "checking for expired idle connections")
+           (define now (current-inexact-milliseconds))
+           (define-values (dead live)
+             (for/fold ([dead (hasheq)]
+                        [live (hasheq)])
+                       ([(c d) (in-hash deads)])
+               (if (< d now)
+                   (values (hash-set dead c d) live)
+                   (values dead (hash-set live c d)))))
+
+           (cond
+             [(hash-empty? dead)
+              (log-http-easy-debug "no idle connections to expire")
+              (loop conns active idle deads waits)]
+
+             [else
+              (log-http-easy-debug "expiring ~a idle connections" (hash-count dead))
+              (define new-conns (filter (lambda (c) (not (hash-has-key? dead c))) conns))
+              (define new-idle (filter (lambda (c) (not (hash-has-key? dead c))) conns))
+              (loop new-conns active new-idle live waits)]))))))))
 
 (define-syntax-rule (send p msg arg ...)
   (thread-send (pool-mgr p) (list 'msg arg ...)))
@@ -147,24 +196,26 @@
              res]))]
 
     [else
-     (thread
-      (lambda ()
-        (sync
-         (handle-evt
-          ch
-          (lambda (c)
-            (log-http-easy-warning "releasing orphan connection")
-            (pool-release p c))))))
+     (async-release p ch)
      (raise (make-timeout-error 'lease))]))
+
+(define (async-release p ch)
+  (thread
+   (lambda ()
+     (sync
+      (handle-evt
+       ch
+       (lambda (c)
+         (log-http-easy-warning "releasing orphan connection")
+         (pool-release p c)))))))
 
 (define/contract (pool-release p c)
   (-> pool? http-conn? void?)
   (send p release c))
 
-(define/contract (pool-shutdown! p)
+(define/contract (pool-close! p)
   (-> pool? void?)
-  (define mgr (pool-mgr p))
-  (thread-send mgr (list 'shutdown))
-  (thread-wait mgr)
+  (send p close)
+  (thread-wait (pool-mgr p))
   (custodian-shutdown-all (pool-custodian p))
-  (log-http-easy-debug "connection pool shut down"))
+  (log-http-easy-debug "connection pool closed"))

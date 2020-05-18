@@ -16,13 +16,13 @@
  method/c
  make-session
  session?
- session-shutdown!
+ session-close!
  session-request)
 
 (define method/c
   (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?))
 
-(struct session (pool)
+(struct session (sema pool [closed? #:mutable])
   #:transparent)
 
 (define/contract (make-session url-or-string [conf (make-pool-config)])
@@ -30,25 +30,31 @@
   (define u (if (url? url-or-string) url-or-string (string->url url-or-string)))
   (define connector (make-url-connector u))
   (define pool (make-pool conf connector))
-  (define s (session pool))
+  (define s (session (make-semaphore 1) pool #f))
   (begin0 s
-    (will-register executor s session-shutdown!)
-    (log-http-easy-debug "session ready")))
+    (will-register executor s session-close!)
+    (log-http-easy-debug "session opened")))
 
-(define/contract (session-shutdown! s)
+(define/contract (session-close! s)
   (-> session? void?)
-  (pool-shutdown! (session-pool s))
-  (log-http-easy-debug "session shut down"))
+  (call-with-semaphore (session-sema s)
+    (lambda ()
+      (unless (session-closed? s)
+        (pool-close! (session-pool s))
+        (set-session-closed?! s #t)
+        (log-http-easy-debug "session closed")))))
 
 ;; TODO: Send timeouts.
 (define/contract (session-request s path
+                                  #:close? [close? #f]
                                   #:method [method 'get]
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
                                   #:timeouts [timeouts (make-timeout-config)]
                                   #:max-attempts [max-attempts 3])
   (->* (session? non-empty-string?)
-       (#:method method/c
+       (#:close? boolean?
+        #:method method/c
         #:headers (hash/c symbol? (or/c bytes? string?))
         #:params (listof (cons/c symbol? string?))
         #:timeouts timeout-config?
@@ -59,9 +65,9 @@
 
   (define pool (session-pool s))
   (define path-with-query
-    (cond
-      [(null? params) path]
-      [else (string-append path "?" (alist->form-urlencoded params))]))
+    (if (null? params)
+        path
+        (string-append path "?" (alist->form-urlencoded params))))
 
   (let loop ([attempts 1])
     (define conn (pool-lease (session-pool s) timeouts))
@@ -80,6 +86,7 @@
       (define-values (resp-status resp-headers resp-out)
         (http-conn-sendrecv!
          conn path-with-query
+         #:close? close?
          #:method (method->bytes method)
          #:headers (headers->list headers)))
       (log-http-easy-debug "response: ~.s" resp-status)
