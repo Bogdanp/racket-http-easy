@@ -20,6 +20,7 @@
  response-output
  response-body
  response-json
+ response-drain!
  response-close!)
 
 (struct response
@@ -30,7 +31,7 @@
    status-message
    headers
    output
-   [body-data #:mutable]
+   [data #:mutable]
    closer
    [closed? #:mutable]))
 
@@ -76,18 +77,21 @@
 
 (define/contract (response-body r)
   (-> response? bytes?)
-  (call-with-semaphore (response-sema r)
-    (lambda ()
-      (cond
-        [(response-body-data r) => values]
-        [else
-         (define body (port->bytes (response-output r)))
-         (begin0 body
-           (set-response-body-data! r body))]))))
+  (unless (response-data r)
+    (response-drain! r))
+  (response-data r))
 
 (define/contract (response-json r)
   (-> response? jsexpr?)
   (bytes->jsexpr (response-body r)))
+
+(define/contract (response-drain! r)
+  (-> response? void?)
+  (call-with-semaphore (response-sema r)
+    (lambda ()
+      (unless (response-data r)
+        (define data (port->bytes (response-output r)))
+        (set-response-data! r data)))))
 
 (define/contract (response-close! r)
   (-> response? void?)

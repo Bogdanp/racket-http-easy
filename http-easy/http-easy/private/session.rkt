@@ -4,6 +4,7 @@
          net/uri-codec
          net/url
          racket/contract
+         racket/format
          racket/match
          racket/string
          "common.rkt"
@@ -22,15 +23,12 @@
 (define method/c
   (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?))
 
-(struct session (sema pool [closed? #:mutable])
+(struct session (sema conf pools [closed? #:mutable])
   #:transparent)
 
-(define/contract (make-session url-or-string [conf (make-pool-config)])
-  (->* ((or/c string? url?)) (pool-config?) session?)
-  (define u (if (url? url-or-string) url-or-string (string->url url-or-string)))
-  (define connector (make-url-connector u))
-  (define pool (make-pool conf connector))
-  (define s (session (make-semaphore 1) pool #f))
+(define/contract (make-session [conf (make-pool-config)])
+  (->* () (pool-config?) session?)
+  (define s (session (make-semaphore 1) conf (make-hash) #f))
   (begin0 s
     (will-register executor s session-close!)
     (log-http-easy-debug "session opened")))
@@ -40,42 +38,81 @@
   (call-with-semaphore (session-sema s)
     (lambda ()
       (unless (session-closed? s)
-        (pool-close! (session-pool s))
+        (for ([p (in-hash-values (session-pools s))])
+          (pool-close! p))
         (set-session-closed?! s #t)
         (log-http-easy-debug "session closed")))))
 
-;; TODO: Send timeouts.
-(define/contract (session-request s path
+(define (session-lease s url timeouts)
+  (define k (pool-key url))
+  (define ps (session-pools s))
+  (define p
+    (call-with-semaphore (session-sema s)
+      (lambda ()
+        (hash-ref! ps k (lambda ()
+                          (define connector (make-url-connector url))
+                          (make-pool (session-conf s) connector))))))
+
+  (pool-lease p timeouts))
+
+(define (session-release s url c)
+  (define k (pool-key url))
+  (define ps (session-pools s))
+  (define p
+    (call-with-semaphore (session-sema s)
+      (lambda ()
+        (hash-ref ps k #f))))
+
+  (when p
+    (pool-release p c)))
+
+(define (pool-key u)
+  (~a (or (url-scheme u)
+          (if (equal? (url-port u) 443)
+              "https"
+              "http"))
+      "://"
+      (url-host u)
+      ":"
+      (or (url-port u)
+          (if (equal? (url-scheme u) "https")
+              443
+              80))))
+
+;; TODO: Write timeouts.
+;; TODO: Read timeouts.
+(define/contract (session-request s
+                                  string-or-url
+                                  #:drain? [drain? #t]
                                   #:close? [close? #f]
                                   #:method [method 'get]
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
                                   #:timeouts [timeouts (make-timeout-config)]
                                   #:max-attempts [max-attempts 3])
-  (->* (session? non-empty-string?)
-       (#:close? boolean?
+  (->* (session? (or/c string? url?))
+       (#:drain? boolean?
+        #:close? boolean?
         #:method method/c
         #:headers (hash/c symbol? (or/c bytes? string?))
         #:params (listof (cons/c symbol? string?))
         #:timeouts timeout-config?
         #:max-attempts exact-positive-integer?)
        response?)
-  (unless (string-prefix? path "/")
-    (raise-argument-error 'path "an absolute path" path))
 
-  (define pool (session-pool s))
+  (define u (if (url? string-or-url) string-or-url (string->url string-or-url)))
+  (define path (url-path-string u))
   (define path-with-query
     (if (null? params)
         path
         (string-append path "?" (alist->form-urlencoded params))))
 
   (let loop ([attempts 1])
-    (define conn (pool-lease (session-pool s) timeouts))
+    (define c (session-lease s u timeouts))
     (with-handlers ([exn:fail?
                      (lambda (e)
                        (log-http-easy-warning "connection failed: ~a" (exn-message e))
-                       (http-conn-close! conn)
-                       (pool-release pool conn)
+                       (session-release s u c)
                        (cond
                          [(< attempts max-attempts)
                           (log-http-easy-debug "retrying~n  attempts: ~a/~a" attempts max-attempts)
@@ -85,7 +122,7 @@
                           (raise e)]))])
       (define-values (resp-status resp-headers resp-out)
         (http-conn-sendrecv!
-         conn path-with-query
+         c path-with-query
          #:close? close?
          #:method (method->bytes method)
          #:headers (headers->list headers)))
@@ -95,9 +132,20 @@
                        resp-headers
                        resp-out
                        (lambda (_)
-                         (pool-release (session-pool s) conn))))
-      (begin0 resp
-        (will-register executor resp response-close!)))))
+                         (session-release s u c))))
+      (cond
+        [drain?
+         (begin0 resp
+           (response-drain! resp)
+           (response-close! resp))]
+
+        [close?
+         (begin0 resp
+           (response-close! resp))]
+
+        [else
+         (begin0 resp
+           (will-register executor resp response-close!))]))))
 
 
 ;; GC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
