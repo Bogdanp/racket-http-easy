@@ -80,8 +80,7 @@
          (lambda (_)
            (match (thread-receive)
              [(list 'close)
-              (for ([(c _) (in-hash conns)])
-                (http-conn-close! c))
+              (for-each http-conn-close! conns)
               (log-http-easy-debug "pool manager stopped")]
 
              [(list 'lease ch)
@@ -112,7 +111,7 @@
                 [else
                  (log-http-easy-debug "connection released")
                  (semaphore-post released-evt)
-                 (loop (cons c conns) new-active (cons c idle) (hash-set deads c (make-deadline)) waits)])])))
+                 (loop conns new-active (cons c idle) (hash-set deads c (make-deadline)) waits)])])))
 
         (handle-evt
          released-evt
