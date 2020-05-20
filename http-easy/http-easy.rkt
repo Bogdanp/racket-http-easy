@@ -36,7 +36,7 @@
 (define (make-requester method)
   (make-keyword-procedure
    (lambda (kws kw-args . args)
-     (when (member '#:method kws)
+     (when (memq '#:method kws)
        (raise-user-error "#:method keyword argument not allowed"))
      (keyword-apply session-request kws kw-args (current-session) args #:method method))))
 
