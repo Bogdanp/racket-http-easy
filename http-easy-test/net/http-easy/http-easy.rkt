@@ -39,6 +39,7 @@
                    out))))
        (lambda ()
          (check-equal? (read (response-output (get "http://127.0.0.1:9911"
+                                                   #:drain? #f
                                                    #:params '((a . "1")
                                                               (a . "2")
                                                               (b . "3")))))
