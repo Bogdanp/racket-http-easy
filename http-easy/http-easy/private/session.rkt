@@ -68,16 +68,16 @@
 
 (define (pool-key u)
   (~a (or (url-scheme u)
-          (if (equal? (url-port u) 443)
-              "https"
-              "http"))
+          (case (url-port u)
+            [(443) "https"]
+            [else "http"]))
       "://"
       (url-host u)
       ":"
       (or (url-port u)
-          (if (equal? (url-scheme u) "https")
-              443
-              80))))
+          (case (url-scheme u)
+            [("https") 443]
+            [else 80]))))
 
 ;; TODO: Write timeouts.
 ;; TODO: Read timeouts.
@@ -95,17 +95,18 @@
         #:close? boolean?
         #:method method/c
         #:headers (hash/c symbol? (or/c bytes? string?))
-        #:params (listof (cons/c symbol? string?))
+        #:params (listof (cons/c symbol? (or/c false/c string?)))
         #:timeouts timeout-config?
         #:max-attempts exact-positive-integer?)
        response?)
 
   (define u (if (url? string-or-url) string-or-url (string->url string-or-url)))
   (define path (url-path-string u))
+  (define all-params (append (url-query u) params))
   (define path-with-query
-    (if (null? params)
+    (if (null? all-params)
         path
-        (string-append path "?" (alist->form-urlencoded params))))
+        (string-append path "?" (alist->form-urlencoded all-params))))
 
   (let loop ([attempts 1])
     (define c (session-lease s u timeouts))

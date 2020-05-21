@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require net/http-easy
+         net/url
          rackunit
          (only-in web-server/http
                   binding-id
@@ -44,6 +45,16 @@
                                                               (a . "2")
                                                               (b . "3")))))
                        '(("a" . "1")
+                         ("a" . "2")
+                         ("b" . "3")))
+
+         (check-equal? (read (response-output (get (string->url "http://127.0.0.1:9911?a=0")
+                                                   #:drain? #f
+                                                   #:params '((a . "1")
+                                                              (a . "2")
+                                                              (b . "3")))))
+                       '(("a" . "0")
+                         ("a" . "1")
                          ("a" . "2")
                          ("b" . "3")))))))))
 
