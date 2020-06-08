@@ -6,5 +6,6 @@
                "memoize"))
 (define build-deps '("net-doc"
                      "racket-doc"
+                     "sandbox-lib"
                      "scribble-lib"))
 (define scribblings '(("http-easy.scrbl")))

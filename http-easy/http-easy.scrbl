@@ -1,6 +1,9 @@
 #lang scribble/manual
 
-@(require (for-label json
+@(require racket/runtime-path
+          racket/sandbox
+          scribble/example
+          (for-label json
                      racket/base
                      racket/contract
                      net/http-easy
@@ -17,11 +20,85 @@ redirects, cookie storage, etc. automatically.
 The API is currently in flux so be aware that it may change before the
 final release.
 
+
+@section{Guide}
+
+@(begin
+   (define-syntax-rule (interaction e ...) (examples #:label #f e ...))
+   (define-runtime-path log-file "guide-log.rktd")
+   (define log-mode (if (getenv "HTTP_EASY_RECORD") 'record 'replay))
+   (define (make-he-eval log-file)
+     (define ev (make-log-based-eval log-file log-mode))
+     (begin0 ev
+       (ev '(require racket/contract))))
+   (define he-eval (make-he-eval log-file)))
+
+@subsection{Making Requests}
+
+Getting started is as easy as requiring the @tt{net/http-easy} module:
+
+@interaction[
+#:eval he-eval
+(require net/http-easy)
+]
+
+And using one of the built-in requesters to perform a request:
+
+@interaction[
+#:eval he-eval
+(define res
+  (get "https://example.com"))
+]
+
+The result is a @racket[response?] value that you can inspect:
+
+@interaction[
+#:eval he-eval
+(response-status-code res)
+(response-status-message res)
+(response-headers-ref res 'date)
+(subbytes (response-body res) 0 30)
+]
+
+Connections to remote servers are automatically pooled so closing the
+response returns its underlying connection to the pool:
+
+@interaction[
+#:eval he-eval
+(response-close! res)
+]
+
+If you forget to manually close a response, its underlying connection
+will get returned to the pool when the response gets
+garbage-collected.
+
+@subsection{Streaming Responses}
+
+Response bodies can be streamed by passing @racket[#f] as the
+@racket[#:drain?] argument to any of the requesters:
+
+@interaction[
+#:eval he-eval
+(define res
+  (get "https://example.com" #:drain? #f))
+]
+
+The input port representing the response body can be accessed using
+@racket[response-output]:
+
+@interaction[
+#:eval he-eval
+(input-port? (response-output res))
+(read-string 5 (response-output res))
+(read-string 5 (response-output res))
+]
+
+
 @section{Reference}
 
 @(define-syntax-rule (defrequester id t ...)
   (defproc (id [uri (or/c string? url?)]
-               [#:drain? drain? boolean? #f]
+               [#:drain? drain? boolean? #t]
                [#:close? close? boolean? #f]
                [#:headers headers (hash/c symbol? (or/c bytes? string?)) (hasheq)]
                [#:params params (listof (cons/c symbol? (or/c false/c string?))) null]
@@ -31,16 +108,17 @@ final release.
                [#:max-redirects max-redirects exact-nonnegative-integer? 16]) response? t ...))
 
 @deftogether[(
+  @defrequester[get]
+  @defrequester[post]
   @defrequester[delete]
   @defrequester[head]
-  @defrequester[get]
   @defrequester[options]
   @defrequester[patch]
-  @defrequester[post]
   @defrequester[put]
 )]{
   Requesters for each of the standard HTTP methods.  See
-  @racket[session-request] for a description of each argument.
+  @racket[session-request] for a description of the individual
+  arguments.
 }
 
 
@@ -68,7 +146,7 @@ final release.
 
 @defproc[(session-request [s session?]
                           [uri (or/c string? url?)]
-                          [#:drain? drain? boolean? #f]
+                          [#:drain? drain? boolean? #t]
                           [#:close? close? boolean? #f]
                           [#:method method symbol? 'get]
                           [#:headers headers (hash/c symbol? (or/c bytes? string?)) (hasheq)]
