@@ -6,7 +6,6 @@
          racket/contract
          racket/format
          racket/match
-         racket/string
          "common.rkt"
          "logger.rkt"
          "pool.rkt"
@@ -88,6 +87,7 @@
                                   #:method [method 'get]
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
+                                  #:data [data #f]
                                   #:timeouts [timeouts (make-timeout-config)]
                                   #:max-attempts [max-attempts 3]
                                   #:max-redirects [max-redirects 16])
@@ -97,6 +97,7 @@
         #:method method/c
         #:headers (hash/c symbol? (or/c bytes? string?))
         #:params (listof (cons/c symbol? (or/c false/c string?)))
+        #:data (or/c false/c bytes? string? input-port?)
         #:timeouts timeout-config?
         #:max-attempts exact-positive-integer?
         #:max-redirects exact-nonnegative-integer?)
@@ -128,7 +129,10 @@
          c path-with-query
          #:close? close?
          #:method (method->bytes method)
-         #:headers (headers->list headers)))
+         #:headers (headers->list headers)
+         #:data (if (input-port? data)
+                    (port->data-procedure data)
+                    data)))
       (log-http-easy-debug "response: ~.s" resp-status)
       (define resp
         (make-response resp-status
@@ -216,3 +220,11 @@
     (bytes-append (symbol->bytes name) #": " (cond
                                                [(bytes? value) value]
                                                [else (string->bytes/utf-8 value)]))))
+
+(define ((port->data-procedure inp) write-chunk)
+  (define buf (make-bytes (* 16 1024)))
+  (let loop ()
+    (define n-read (read-bytes-avail! buf inp))
+    (unless (eof-object? n-read)
+      (write-chunk (subbytes buf 0 n-read))
+      (loop))))

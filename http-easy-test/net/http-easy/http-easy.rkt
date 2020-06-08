@@ -10,6 +10,7 @@
                   permanently
                   redirect-to
                   request-bindings/raw
+                  request-post-data/raw
                   response/output
                   see-other
                   temporarily/same-method)
@@ -63,74 +64,91 @@
                          ("a" . "2")
                          ("b" . "3"))))))
 
-    (test-case "30[12] redirects"
-      (define-values (dispatch _)
-        (dispatch-rules
-         [("")
-          (lambda (_)
-            (redirect-to "/a" permanently))]
+    (test-suite
+     "bodies"
 
-         [("a")
-          (lambda (_)
-            (redirect-to "/b"))]
+     (test-case "can send bodies"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           (lambda (out)
+             (display (request-post-data/raw req) out))))
+        (lambda ()
+          (check-equal? (response-body (post "http://127.0.0.1:9911" #:data #"hello")) #"hello")
+          (check-equal? (response-body (post "http://127.0.0.1:9911" #:data "hello")) #"hello")
+          (check-equal? (response-body (post "http://127.0.0.1:9911" #:data (open-input-string "hello"))) #"hello")))))
 
-         [("b")
-          (lambda (_)
-            (response/output
-             (lambda (out)
-               (display "hello" out))))]))
+    (test-suite
+     "redirects"
 
-      (call-with-web-server
-       dispatch
+     (test-case "30[12] redirects"
+       (define-values (dispatch _)
+         (dispatch-rules
+          [("")
+           (lambda (_)
+             (redirect-to "/a" permanently))]
 
-       (lambda ()
-         (test-case "can follow redirects"
-           (check-equal? (response-body (get "http://127.0.0.1:9911")) #"hello"))
+          [("a")
+           (lambda (_)
+             (redirect-to "/b"))]
 
-         (test-case "redirects can be exhausted"
-           (check-equal? (response-status-code (get "http://127.0.0.1:9911"
-                                                    #:max-redirects 1))
-                         302)))))
+          [("b")
+           (lambda (_)
+             (response/output
+              (lambda (out)
+                (display "hello" out))))]))
 
-    (test-case "303 redirects change the request method to GET"
-      (define-values (dispatch _)
-        (dispatch-rules
-         [("")
-          #:method "post"
-          (lambda (_)
-            (redirect-to "/a" see-other))]
+       (call-with-web-server
+        dispatch
 
-         [("a")
-          #:method "get"
-          (lambda (_)
-            (response/output
-             (lambda (out)
-               (display "hello" out))))]))
+        (lambda ()
+          (test-case "can follow redirects"
+            (check-equal? (response-body (get "http://127.0.0.1:9911")) #"hello"))
 
-      (call-with-web-server
-       dispatch
-       (lambda ()
-         (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))
+          (test-case "redirects can be exhausted"
+            (check-equal? (response-status-code (get "http://127.0.0.1:9911"
+                                                     #:max-redirects 1))
+                          302)))))
 
-    (test-case "307 redirects preserve the request method"
-      (define-values (dispatch _)
-        (dispatch-rules
-         [("")
-          #:method "post"
-          (lambda (_)
-            (redirect-to "/a" temporarily/same-method))]
+     (test-case "303 redirects change the request method to GET"
+       (define-values (dispatch _)
+         (dispatch-rules
+          [("")
+           #:method "post"
+           (lambda (_)
+             (redirect-to "/a" see-other))]
 
-         [("a")
-          #:method "post"
-          (lambda (_)
-            (response/output
-             (lambda (out)
-               (display "hello" out))))]))
+          [("a")
+           #:method "get"
+           (lambda (_)
+             (response/output
+              (lambda (out)
+                (display "hello" out))))]))
 
-      (call-with-web-server
-       dispatch
-       (lambda ()
-         (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello")))))))
+       (call-with-web-server
+        dispatch
+        (lambda ()
+          (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))
+
+     (test-case "307 redirects preserve the request method"
+       (define-values (dispatch _)
+         (dispatch-rules
+          [("")
+           #:method "post"
+           (lambda (_)
+             (redirect-to "/a" temporarily/same-method))]
+
+          [("a")
+           #:method "post"
+           (lambda (_)
+             (response/output
+              (lambda (out)
+                (display "hello" out))))]))
+
+       (call-with-web-server
+        dispatch
+        (lambda ()
+          (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))))))
 
 (module+ test
   (require rackunit/text-ui)
