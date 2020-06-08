@@ -89,7 +89,8 @@
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
                                   #:timeouts [timeouts (make-timeout-config)]
-                                  #:max-attempts [max-attempts 3])
+                                  #:max-attempts [max-attempts 3]
+                                  #:max-redirects [max-redirects 16])
   (->* (session? (or/c string? url?))
        (#:drain? boolean?
         #:close? boolean?
@@ -97,7 +98,8 @@
         #:headers (hash/c symbol? (or/c bytes? string?))
         #:params (listof (cons/c symbol? (or/c false/c string?)))
         #:timeouts timeout-config?
-        #:max-attempts exact-positive-integer?)
+        #:max-attempts exact-positive-integer?
+        #:max-redirects exact-nonnegative-integer?)
        response?)
 
   (define u (if (url? string-or-url) string-or-url (string->url string-or-url)))
@@ -134,7 +136,33 @@
                        resp-out
                        (lambda (_)
                          (session-release s u c))))
+
       (cond
+        [(and (positive? max-redirects) (redirect? resp))
+         (define location:bs (response-headers-ref resp 'location))
+         (define location (string->url (bytes->string/utf-8 location:bs)))
+         (define target
+           (cond
+             [(url-host location) location]
+             [else (struct-copy url u
+                                [path (url-path location)]
+                                [query (url-query location)])]))
+         (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location:bs)
+         (response-drain! resp)
+         (response-close! resp)
+         (session-request s
+                          target
+                          #:drain? drain?
+                          #:close? close?
+                          #:method (case (response-status-code resp)
+                                     [(301 302) 'get]
+                                     [(303)     'get]
+                                     [(307)     method])
+                          #:headers headers
+                          #:timeouts timeouts
+                          #:max-attempts max-attempts
+                          #:max-redirects (sub1 max-redirects))]
+
         [drain?
          (begin0 resp
            (response-drain! resp)
@@ -147,6 +175,11 @@
         [else
          (begin0 resp
            (will-register executor resp response-close!))]))))
+
+(define (redirect? resp)
+  (case (response-status-code resp)
+    [(301 302 303 307) (response-headers-ref resp 'location)]
+    [else #f]))
 
 
 ;; GC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
