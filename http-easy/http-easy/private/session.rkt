@@ -22,10 +22,12 @@
 (define method/c
   (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?))
 
+(define default-pool-config (make-pool-config))
+
 (struct session (sema conf pools [closed? #:mutable])
   #:transparent)
 
-(define/contract (make-session [conf (make-pool-config)])
+(define/contract (make-session [conf default-pool-config])
   (->* () (pool-config?) session?)
   (define s (session (make-semaphore 1) conf (make-hash) #f))
   (begin0 s
@@ -78,6 +80,8 @@
             [("https") 443]
             [else 80]))))
 
+(define default-timeout-config (make-timeout-config))
+
 ;; TODO: Write timeouts.
 ;; TODO: Read timeouts.
 (define/contract (session-request s
@@ -88,7 +92,7 @@
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
                                   #:data [data #f]
-                                  #:timeouts [timeouts (make-timeout-config)]
+                                  #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
                                   #:max-redirects [max-redirects 16])
   (->* (session? (or/c string? url?))

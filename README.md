@@ -1,6 +1,6 @@
 # http-easy
 
-A WIP high-level HTTP client for Racket.
+A high-level HTTP client for Racket.
 
 ## License
 

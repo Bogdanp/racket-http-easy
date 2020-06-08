@@ -16,7 +16,7 @@
  response-status-message
  response-headers
  response-headers-ref
- response-headers-ref/all
+ response-headers-ref*
  response-output
  response-body
  response-json
@@ -73,7 +73,7 @@
       (subbytes header (+ 2 (bytes-length h:bs))))))
 
 (define-headers-ref response-headers-ref for/first)
-(define-headers-ref response-headers-ref/all for/list)
+(define-headers-ref response-headers-ref* for/list)
 
 (define/contract (response-body r)
   (-> response? bytes?)

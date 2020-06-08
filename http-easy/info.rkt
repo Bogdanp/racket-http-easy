@@ -4,4 +4,7 @@
 (define collection "net")
 (define deps '("base"
                "memoize"))
-(define build-deps '())
+(define build-deps '("net-doc"
+                     "racket-doc"
+                     "scribble-lib"))
+(define scribblings '(("http-easy.scrbl")))
