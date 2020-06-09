@@ -22,7 +22,8 @@
  response-body
  response-json
  response-drain!
- response-close!)
+ response-close!
+ read-response)
 
 (struct response
   (sema
@@ -87,6 +88,10 @@
 (define/contract (response-json r)
   (-> response? (or/c eof-object? jsexpr?))
   (bytes->jsexpr (response-body r)))
+
+(define/contract (read-response r)
+  (-> response? any/c)
+  (read (response-output r)))
 
 (define/contract (response-drain! r)
   (-> response? void?)

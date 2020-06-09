@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require net/http-easy
+(require json
+         net/http-easy
          net/url
          racket/match
          rackunit
@@ -50,20 +51,20 @@
                            (bytes->string/utf-8 (binding:form-value bind))))
                    out))))
        (lambda ()
-         (check-equal? (read (response-output (get "http://127.0.0.1:9911"
-                                                   #:drain? #f
-                                                   #:params '((a . "1")
-                                                              (a . "2")
-                                                              (b . "3")))))
+         (check-equal? (read-response (get "http://127.0.0.1:9911"
+                                           #:drain? #f
+                                           #:params '((a . "1")
+                                                      (a . "2")
+                                                      (b . "3"))))
                        '(("a" . "1")
                          ("a" . "2")
                          ("b" . "3")))
 
-         (check-equal? (read (response-output (get (string->url "http://127.0.0.1:9911?a=0")
-                                                   #:drain? #f
-                                                   #:params '((a . "1")
-                                                              (a . "2")
-                                                              (b . "3")))))
+         (check-equal? (read-response (get (string->url "http://127.0.0.1:9911?a=0")
+                                           #:drain? #f
+                                           #:params '((a . "1")
+                                                      (a . "2")
+                                                      (b . "3"))))
                        '(("a" . "0")
                          ("a" . "1")
                          ("a" . "2")
@@ -108,11 +109,40 @@
                [_
                 (write 'fail out)]))))
         (lambda ()
-          (check-equal? (read (response-output (get "http://127.0.0.1:9911" #:drain? #f))) 'fail)
-          (check-equal? (read (response-output (get "http://127.0.0.1:9911"
-                                                    #:drain? #f
-                                                    #:auth (auth/basic "Aladdin" "OpenSesame"))))
+          (check-equal? (read-response (get "http://127.0.0.1:9911" #:drain? #f)) 'fail)
+          (check-equal? (read-response (get "http://127.0.0.1:9911"
+                                            #:drain? #f
+                                            #:auth (auth/basic "Aladdin" "OpenSesame")))
                         'ok)))))
+
+    (test-suite
+     "json"
+
+     (test-case "can send form payloads"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           (lambda (out)
+             (write (for/list ([bind (in-list (request-bindings/raw req))])
+                      (cons (binding-id bind) (binding:form-value bind)))
+                    out))))
+        (lambda ()
+          (check-equal? (read-response (post "http://127.0.0.1:9911"
+                                             #:drain? #f
+                                             #:form '((hello . "world"))))
+                        '((#"hello" . #"world"))))))
+
+     (test-case "can send json payloads"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           (lambda (out)
+             (write (bytes->jsexpr (request-post-data/raw req)) out))))
+        (lambda ()
+          (check-equal? (read-response (post "http://127.0.0.1:9911"
+                                             #:drain? #f
+                                             #:json (hasheq 'hello "world")))
+                        (hasheq 'hello "world"))))))
 
     (test-suite
      "redirects"
@@ -217,9 +247,9 @@
                  (lambda (out)
                    (write 'fail/auth out)))]))
            (lambda ()
-             (check-equal? (read (response-output (get "http://127.0.0.1:9911"
-                                                       #:drain? #f
-                                                       #:auth (auth/basic "Aladdin" "OpenSesame"))))
+             (check-equal? (read-response (get "http://127.0.0.1:9911"
+                                               #:drain? #f
+                                               #:auth (auth/basic "Aladdin" "OpenSesame")))
                            'ok))))))))))
 
 (module+ test
