@@ -94,6 +94,9 @@
 (define (supplied? v)
   (not (eq? v unsupplied)))
 
+(define supplied-arg?
+  (compose1 not unsupplied-arg?))
+
 ;; TODO: Write timeouts.
 ;; TODO: Read timeouts.
 (define/contract (session-request s
@@ -110,20 +113,30 @@
                                   #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
                                   #:max-redirects [max-redirects 16])
-  (->* (session? (or/c bytes? string? url?))
-       (#:drain? boolean?
-        #:close? boolean?
-        #:method method/c
-        #:headers headers/c
-        #:params query-params/c
-        #:auth (or/c false/c auth-procedure/c)
-        #:data (or/c false/c bytes? string? input-port?)
-        #:form query-params/c
-        #:json jsexpr?
-        #:timeouts timeout-config?
-        #:max-attempts exact-positive-integer?
-        #:max-redirects exact-nonnegative-integer?)
-       response?)
+  (->i ([s session?]
+        [urlish (or/c bytes? string? url?)])
+       (#:drain? [drain? boolean?]
+        #:close? [close? boolean?]
+        #:method [method method/c]
+        #:headers [headers headers/c]
+        #:params [params query-params/c]
+        #:auth [auth (or/c false/c auth-procedure/c)]
+        #:data [data (or/c false/c bytes? string? input-port? data-procedure/c)]
+        #:form [form query-params/c]
+        #:json [json jsexpr?]
+        #:timeouts [timeouts timeout-config?]
+        #:max-attempts [max-attempts exact-positive-integer?]
+        #:max-redirects [max-redirects exact-nonnegative-integer?])
+
+       #:pre/name (data form json)
+       "at most one of the #:data, #:form or #:json keyword arguments"
+       (cond
+         [(supplied-arg? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
+         [(supplied-arg? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
+         [(supplied-arg? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
+         [else #t])
+
+       [res response?])
 
   (define (request u
                    #:attempts [attempts 1]

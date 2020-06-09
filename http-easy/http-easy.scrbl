@@ -4,6 +4,7 @@
           racket/sandbox
           scribble/example
           (for-label json
+                     net/http-client
                      net/http-easy
                      net/url
                      openssl
@@ -206,7 +207,7 @@ keyword argument:
                [#:headers headers headers/c (hasheq)]
                [#:params params query-params/c null]
                [#:auth auth (or/c false/c auth-procedure/c) #f]
-               [#:data data (or/c false/c bytes? string? input-port?) #f]
+               [#:data data (or/c false/c bytes? string? input-port? data-procedure/c) #f]
                [#:form form query-params/c _unsupplied]
                [#:json json jsexpr? _unsupplied]
                [#:timeouts timeouts timeout-config? (make-timeout-config)]
@@ -271,7 +272,7 @@ keyword argument:
                           [#:headers headers headers/c (hasheq)]
                           [#:params params query-params/c null]
                           [#:auth auth (or/c false/c auth-procedure/c) #f]
-                          [#:data data (or/c false/c bytes? string? input-port?) #f]
+                          [#:data data (or/c false/c bytes? string? input-port? data-procedure/c) #f]
                           [#:form form query-params/c _unsupplied]
                           [#:json json jsexpr? _unsupplied]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
@@ -304,6 +305,12 @@ keyword argument:
   params to be added to the request.  When following redirects, the
   auth procedure is applied to subsequent requests only if the target
   URL has the @tech{same origin} as the original request.
+
+  The @racket[data], @racket[form] and @racket[json] arguments can be
+  used to send arbitrary data, form-encoded data and JSON data,
+  respectively, as part of the request payload.  Only one of the
+  arguments may be supplied at a time and providing more than one
+  raises a contract error.
 
   The @racket[max-redirects] argument controls how many redirects are
   followed by the request.  Redirect cycles are not detected.  To
