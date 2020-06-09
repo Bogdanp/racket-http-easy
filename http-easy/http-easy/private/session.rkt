@@ -15,7 +15,8 @@
          "logger.rkt"
          "pool.rkt"
          "response.rkt"
-         "timeout.rkt")
+         "timeout.rkt"
+         "user-agent.rkt")
 
 (provide
  make-session
@@ -132,7 +133,8 @@
                                   #:json [json unsupplied]
                                   #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
-                                  #:max-redirects [max-redirects 16])
+                                  #:max-redirects [max-redirects 16]
+                                  #:user-agent [user-agent (current-user-agent)])
   (->i ([s session?]
         [urlish (or/c bytes? string? url?)])
        (#:drain? [drain? boolean?]
@@ -146,7 +148,8 @@
         #:json [json jsexpr?]
         #:timeouts [timeouts timeout-config?]
         #:max-attempts [max-attempts exact-positive-integer?]
-        #:max-redirects [max-redirects exact-nonnegative-integer?])
+        #:max-redirects [max-redirects exact-nonnegative-integer?]
+        #:user-agent [user-agent (or/c bytes? string?)])
 
        #:pre/name (data form json)
        "at most one of the #:data, #:form or #:json keyword arguments"
@@ -170,9 +173,16 @@
                    #:history [history null]
                    #:redirects [redirects-remaining max-redirects])
     (define-values (headers* params*)
-      (if auth
-          (auth u headers params)
-          (values headers params)))
+      (let*-values ([(headers) (hash-set headers 'user-agent user-agent)]
+                    [(headers) (maybe-add-cookie-header s u headers)]
+                    [(headers) (cond
+                                 [(supplied? json) (hash-set headers 'content-type #"application/json; charset=utf-8")]
+                                 [(supplied? form) (hash-set headers 'content-type #"application/x-www-form-urlencoded; charset=utf-8")]
+                                 [else headers])]
+                    [(headers params) (if auth
+                                          (auth u headers params)
+                                          (values headers params))])
+        (values headers params)))
     (define path&query (make-path&query u params*))
     (define c (session-lease s u timeouts))
     (with-handlers ([exn:fail?
@@ -193,13 +203,7 @@
          c path&query
          #:close? close?
          #:method (method->bytes method)
-         #:headers (headers->list
-                    (maybe-add-cookie-header
-                     s u
-                     (cond
-                       [(supplied? json) (hash-set headers* 'content-type #"application/json; charset=utf-8")]
-                       [(supplied? form) (hash-set headers* 'content-type #"application/x-www-form-urlencoded; charset=utf-8")]
-                       [else headers*])))
+         #:headers (headers->list headers*)
          #:data (cond
                   [(supplied? json) (jsexpr->bytes json)]
                   [(supplied? form) (alist->form-urlencoded form)]

@@ -240,7 +240,8 @@ your @racket[session?]:
                [#:json json jsexpr? _unsupplied]
                [#:timeouts timeouts timeout-config? (make-timeout-config)]
                [#:max-attempts max-attempts exact-positive-integer? 3]
-               [#:max-redirects max-redirects exact-nonnegative-integer? 16]) response? t ...))
+               [#:max-redirects max-redirects exact-nonnegative-integer? 16]
+               [#:user-agent user-agent (or/c bytes? string?) (current-user-agent)]) response? t ...))
 
 @deftogether[(
   @defrequester[get]
@@ -310,7 +311,8 @@ your @racket[session?]:
                           [#:json json jsexpr? _unsupplied]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
                           [#:max-attempts max-attempts exact-positive-integer? 3]
-                          [#:max-redirects max-redirects exact-nonnegative-integer? 16]) response?]{
+                          [#:max-redirects max-redirects exact-nonnegative-integer? 16]
+                          [#:user-agent user-agent (or/c bytes? string?) (current-user-agent)]) response?]{
 
   Requests @racket[uri] using @racket[s]'s connection pool.
 
@@ -501,4 +503,12 @@ their scheme, hostname and port are the same.
 
   The @racket[send] argument controls how long sending the request
   headers to the remote end can take.
+}
+
+
+@subsection{User Agents}
+
+@defparam[current-user-agent user-agent (or/c bytes? string?)]{
+  Holds the value of the @tt{User-Agent} header that is sent with
+  every request.
 }

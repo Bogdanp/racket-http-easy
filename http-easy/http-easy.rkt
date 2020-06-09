@@ -9,7 +9,8 @@
          "http-easy/private/pool.rkt"
          "http-easy/private/response.rkt"
          "http-easy/private/session.rkt"
-         "http-easy/private/timeout.rkt")
+         "http-easy/private/timeout.rkt"
+         "http-easy/private/user-agent.rkt")
 
 (provide
  exn:fail:http-easy?
@@ -28,6 +29,7 @@
  (all-from-out "http-easy/private/contract.rkt")
  (all-from-out "http-easy/private/response.rkt")
  (all-from-out "http-easy/private/session.rkt")
+ (all-from-out "http-easy/private/user-agent.rkt")
 
  current-session)
 
