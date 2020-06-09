@@ -158,7 +158,7 @@ The above is equivalent to:
 
 @subsection{Sending Data}
 
-You can supply a list of pairs to be sent as a
+You can supply a list of pairs to be sent as an
 @tt{application/x-www-form-urlencoded} payload:
 
 @interaction[
@@ -172,7 +172,7 @@ You can supply a list of pairs to be sent as a
 ]
 
 Alternatively, you can supply the @racket[#:json] keyword argument to
-send a @tt{application/json} payload:
+send an @tt{application/json} payload:
 
 @interaction[
 #:eval he-eval
