@@ -1,10 +1,12 @@
 #lang racket/base
 
 (require json
+         net/cookies/user-agent
          net/http-client
          net/uri-codec
          net/url
          openssl
+         racket/class
          racket/contract
          racket/format
          racket/match
@@ -23,16 +25,18 @@
 
 (define default-pool-config (make-pool-config))
 
-(struct session (sema conf pools ssl-ctx [closed? #:mutable])
+(struct session (sema conf pools ssl-ctx cookies [closed? #:mutable])
   #:transparent)
 
 (define/contract (make-session #:pool-config [conf default-pool-config]
-                               #:ssl-context [ssl-ctx (ssl-secure-client-context)])
+                               #:ssl-context [ssl-ctx (ssl-secure-client-context)]
+                               #:cookie-jar [cookies #f])
   (->* ()
        (#:pool-config pool-config?
-        #:ssl-context ssl-client-context?)
+        #:ssl-context ssl-client-context?
+        #:cookie-jar (is-a?/c cookie-jar<%>))
        session?)
-  (define s (session (make-semaphore 1) conf (make-hash) ssl-ctx #f))
+  (define s (session (make-semaphore 1) conf (make-hash) ssl-ctx cookies #f))
   (begin0 s
     (will-register executor s session-close!)
     (log-http-easy-debug "session opened")))
@@ -70,6 +74,22 @@
 
   (when p
     (pool-release p c)))
+
+(define (maybe-add-cookie-header s u headers)
+  (cond
+    [(session-cookies s)
+     => (lambda (cookie-jar)
+          (parameterize ([current-cookie-jar cookie-jar])
+            (define hdr (cookie-header u))
+            (if hdr (hash-set headers 'cookie hdr) headers)))]
+
+    [else headers]))
+
+(define (maybe-save-cookies! s u headers/raw)
+  (define cookie-jar (session-cookies s))
+  (when cookie-jar
+    (parameterize ([current-cookie-jar cookie-jar])
+      (extract-and-save-cookies! headers/raw u))))
 
 (define (pool-key u)
   (~a (or (url-scheme u)
@@ -162,7 +182,7 @@
                        (cond
                          [(< attempts max-attempts)
                           (log-http-easy-debug "retrying~n  attempts: ~a/~a" attempts max-attempts)
-                          (request u path&query
+                          (request u
                                    #:attempts (add1 attempts)
                                    #:history history)]
 
@@ -174,16 +194,19 @@
          #:close? close?
          #:method (method->bytes method)
          #:headers (headers->list
-                    (cond
-                      [(supplied? json) (hash-set headers* 'content-type #"application/json; charset=utf-8")]
-                      [(supplied? form) (hash-set headers* 'content-type #"application/x-www-form-urlencoded; charset=utf-8")]
-                      [else headers*]))
+                    (maybe-add-cookie-header
+                     s u
+                     (cond
+                       [(supplied? json) (hash-set headers* 'content-type #"application/json; charset=utf-8")]
+                       [(supplied? form) (hash-set headers* 'content-type #"application/x-www-form-urlencoded; charset=utf-8")]
+                       [else headers*])))
          #:data (cond
                   [(supplied? json) (jsexpr->bytes json)]
                   [(supplied? form) (alist->form-urlencoded form)]
                   [(input-port? data) (port->data-procedure data)]
                   [else data])))
       (log-http-easy-debug "response: ~.s" resp-status)
+      (maybe-save-cookies! s u resp-headers)
       (define resp
         (make-response resp-status
                        resp-headers

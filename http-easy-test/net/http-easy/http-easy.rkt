@@ -1,8 +1,10 @@
 #lang racket/base
 
 (require json
+         net/cookies
          net/http-easy
          net/url
+         racket/class
          racket/match
          rackunit
          web-server/dispatch
@@ -12,6 +14,7 @@
                   header
                   header-value
                   headers-assq*
+                  make-header
                   permanently
                   redirect-to
                   request-bindings/raw
@@ -250,7 +253,41 @@
              (check-equal? (read-response (get "http://127.0.0.1:9911"
                                                #:drain? #f
                                                #:auth (auth/basic "Aladdin" "OpenSesame")))
-                           'ok))))))))))
+                           'ok)))))))
+
+    (test-suite
+     "cookies"
+
+     (test-case "cookies are discarded by default"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           #:headers (list (make-header #"set-cookie" (cookie->set-cookie-header
+                                                       (make-cookie "a-cookie" "hello"))))
+           (lambda (out)
+             (write (headers-assq* #"cookie" (request-headers/raw req)) out))))
+        (lambda ()
+          (check-false (read-response (get "http://127.0.0.1:9911" #:drain? #f)))
+          (check-false (read-response (get "http://127.0.0.1:9911" #:drain? #f))))))
+
+     (test-case "cookie jars preserve cookies"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           #:headers (list (make-header #"set-cookie" (cookie->set-cookie-header
+                                                       (make-cookie "a-cookie" "hello"))))
+           (lambda (out)
+             (cond
+               [(headers-assq* #"cookie" (request-headers/raw req))
+                => (lambda (hdr)
+                     (write (header-value hdr) out))]
+
+               [else (write #f out)]))))
+        (lambda ()
+          (parameterize ([current-session (make-session #:cookie-jar (new list-cookie-jar%))])
+            (check-false (read-response (get "http://127.0.0.1:9911" #:drain? #f)))
+            (check-equal? (read-response (get "http://127.0.0.1:9911" #:drain? #f))
+                          #"a-cookie=hello")))))))))
 
 (module+ test
   (require rackunit/text-ui)

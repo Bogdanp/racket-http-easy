@@ -4,11 +4,13 @@
           racket/sandbox
           scribble/example
           (for-label json
+                     net/cookies/user-agent
                      net/http-client
                      net/http-easy
                      net/url
                      openssl
                      racket/base
+                     racket/class
                      racket/contract))
 
 @title{@tt{http-easy}: a high-level HTTP client}
@@ -26,6 +28,7 @@ interface.  It automatically handles:
   @item{streaming responses}
   @item{authentication}
   @item{redirect following}
+  @item{cookie storage}
 ]
 
 The following features are currently planned:
@@ -33,7 +36,6 @@ The following features are currently planned:
 @itemlist[
   @item{HTTP proxy support}
   @item{multipart file uploads}
-  @item{cookie storage}
 ]
 
 The following features may be supported in the future:
@@ -197,6 +199,32 @@ keyword argument:
 (hash-ref res 'data)
 ]
 
+@subsection{Cookie Storage}
+
+To store cookies between requests pass a @racket[cookie-jar<%>] into
+your @racket[session?]:
+
+@interaction[
+#:eval he-eval
+(require net/cookies
+         net/url
+         racket/class)
+
+(code:line)
+(define jar (new list-cookie-jar%))
+(define session-with-cookies
+  (make-session #:cookie-jar jar))
+
+(code:line)
+(parameterize ([current-session session-with-cookies])
+  (get "https://httpbin.org/cookies/set/hello/world")
+  (response-json (get "https://httpbin.org/cookies")))
+
+(code:line)
+(for ([c (in-list (send jar cookies-matching (string->url "https://httpbin.org")))])
+  (printf "~a: ~a" (ua-cookie-name c) (ua-cookie-value c)))
+]
+
 
 @section{Reference}
 
@@ -248,7 +276,8 @@ keyword argument:
 }
 
 @defproc[(make-session [#:pool-config pool-config pool-config? (make-pool-config)]
-                       [#:ssl-context ssl-context ssl-client-context? (ssl-secure-client-context)]) session?]{
+                       [#:ssl-context ssl-context ssl-client-context? (ssl-secure-client-context)]
+                       [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]) session?]{
   Produces a @racket[session?] value with @racket[pool-config] as its
   connection pool configuration.  Each requested scheme, host and port
   pair has its own connection pool.
@@ -258,6 +287,10 @@ keyword argument:
   verifies hostnames and avoids using weak ciphers.  To use a custom
   certificate chain or private key, you can use
   @racket[ssl-make-client-context].
+
+  The @racket[cookie-jar] argument specifies the cookie jar to use to
+  store cookies between requests made against a session.  The default
+  is to discard all cookies.  See @racket[list-cookie-jar%].
 }
 
 @defproc[(session-close! [s session?]) void?]{

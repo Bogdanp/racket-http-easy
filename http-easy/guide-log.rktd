@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Tue, 09 Jun 2020 11:01:24 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Tue, 09 Jun 2020 21:05:31 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -108,3 +108,29 @@
  #""
  #"")
 ((hash-ref res 'data) ((3) 0 () 0 () () (c values c (u . "hello"))) #"" #"")
+((require net/cookies net/url racket/class)
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((define jar (new list-cookie-jar%))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((define session-with-cookies (make-session #:cookie-jar jar))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((parameterize
+  ((current-session session-with-cookies))
+  (get "https://httpbin.org/cookies/set/hello/world")
+  (response-json (get "https://httpbin.org/cookies")))
+ ((3) 0 () 0 () () (c values c (h - () (cookies h - () (hello u . "world")))))
+ #""
+ #"")
+((for
+  ((c
+    (in-list (send jar cookies-matching (string->url "https://httpbin.org")))))
+  (printf "~a: ~a" (ua-cookie-name c) (ua-cookie-value c)))
+ ((3) 0 () 0 () () (c values c (void)))
+ #"hello: world"
+ #"")
