@@ -414,11 +414,11 @@ their scheme, hostname and port are the same.
 }
 
 @defproc[(read-response [r response?]) any/c]{
-  Equivalent to @racketblock[(read (response-output r))].
+  Equivalent to @racket[(read (response-output r))].
 }
 
 @defproc[(read-response-json [r response?]) (or/c eof-object? jsexpr?)]{
-  Equivalent to @racketblock[(read-json (response-output r))].
+  Equivalent to @racket[(read-json (response-output r))].
 }
 
 @defproc[(response-drain! [r response?]) void?]{
