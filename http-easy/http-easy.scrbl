@@ -411,6 +411,14 @@ their scheme, hostname and port are the same.
   it.  An exception is raised if the data is not valid JSON.
 }
 
+@defproc[(read-response [r response?]) any/c]{
+  Equivalent to @racketblock[(read (response-output r))].
+}
+
+@defproc[(read-response-json [r response?]) (or/c eof-object? jsexpr?)]{
+  Equivalent to @racketblock[(read-json (response-output r))].
+}
+
 @defproc[(response-drain! [r response?]) void?]{
   Drains @racket[r]'s output port.
 }
