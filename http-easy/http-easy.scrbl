@@ -19,8 +19,9 @@ interface.  It automatically handles:
 
 @itemlist[
   @item{connection pooling}
-  @item{connection timeouts}
+  @item{connection timeouts -- WIP}
   @item{SSL verification}
+  @item{digest authentication}
   @item{cookie storage}
   @item{file uploads}
   @item{redirect following}
@@ -107,7 +108,7 @@ The input port representing the response body can be accessed using
 @section{Reference}
 
 @(define-syntax-rule (defrequester id t ...)
-  (defproc (id [uri (or/c string? url?)]
+  (defproc (id [uri (or/c bytes? string? url?)]
                [#:drain? drain? boolean? #t]
                [#:close? close? boolean? #f]
                [#:headers headers (hash/c symbol? (or/c bytes? string?)) (hasheq)]
@@ -162,7 +163,7 @@ The input port representing the response body can be accessed using
 }
 
 @defproc[(session-request [s session?]
-                          [uri (or/c string? url?)]
+                          [uri (or/c bytes? string? url?)]
                           [#:drain? drain? boolean? #t]
                           [#:close? close? boolean? #f]
                           [#:method method symbol? 'get]

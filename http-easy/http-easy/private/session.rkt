@@ -101,7 +101,7 @@
                                   #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
                                   #:max-redirects [max-redirects 16])
-  (->* (session? (or/c string? url?))
+  (->* (session? (or/c bytes? string? url?))
        (#:drain? boolean?
         #:close? boolean?
         #:method method/c
@@ -113,13 +113,8 @@
         #:max-redirects exact-nonnegative-integer?)
        response?)
 
-  (define u (if (url? string-or-url) string-or-url (string->url string-or-url)))
-  (define path (url-path-string u))
-  (define all-params (append (url-query u) params))
-  (define path-with-query
-    (if (null? all-params)
-        path
-        (string-append path "?" (alist->form-urlencoded all-params))))
+  (define-values (u path&query)
+    (->url&path string-or-url params))
 
   (let loop ([attempts 1])
     (define c (session-lease s u timeouts))
@@ -136,7 +131,7 @@
                           (raise e)]))])
       (define-values (resp-status resp-headers resp-out)
         (http-conn-sendrecv!
-         c path-with-query
+         c path&query
          #:close? close?
          #:method (method->bytes method)
          #:headers (headers->list headers)
@@ -189,6 +184,20 @@
         [else
          (begin0 resp
            (will-register executor resp response-close!))]))))
+
+(define (->url&path string-or-url params)
+  (define u
+    (cond
+      [(url? string-or-url) string-or-url]
+      [(bytes? string-or-url) (string->url (bytes->string/utf-8 string-or-url))]
+      [else (string->url string-or-url)]))
+  (define path (url-path-string u))
+  (define all-params (append (url-query u) params))
+  (define path&query
+    (if (null? all-params)
+        path
+        (string-append path "?" (alist->form-urlencoded all-params))))
+  (values u path&query))
 
 (define (redirect? resp)
   (case (response-status-code resp)
