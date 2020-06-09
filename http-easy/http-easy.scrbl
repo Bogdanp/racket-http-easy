@@ -21,11 +21,18 @@ interface.  It automatically handles:
   @item{connection pooling}
   @item{connection timeouts -- WIP}
   @item{SSL verification}
-  @item{digest authentication}
-  @item{cookie storage}
-  @item{file uploads}
-  @item{redirect following}
+  @item{automatic decompression}
   @item{streaming responses}
+  @item{digest authentication}
+  @item{redirect following}
+]
+
+The following features are currently planned:
+
+@itemlist[
+  @item{HTTP/2 and HTTP/3 support}
+  @item{multipart file uploads}
+  @item{cookie storage}
 ]
 
 The API is currently in flux so be aware that it may change before the
@@ -234,6 +241,12 @@ The input port representing the response body can be accessed using
   Looks up all the response headers whose names are @racket[h].  As in
   @racket[response-headers-ref], the names are all normalized to lower
   case.
+}
+
+@defproc[(response-history [r response?]) (listof response?)]{
+  When redirects are followed, the trail of redirected responses is
+  preserved in each individual response.  The responses are sorted
+  reverse chronologically.
 }
 
 @defproc[(response-body [r response?]) bytes?]{

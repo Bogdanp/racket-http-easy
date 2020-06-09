@@ -113,10 +113,11 @@
         #:max-redirects exact-nonnegative-integer?)
        response?)
 
-  (define-values (u path&query)
-    (->url&path string-or-url params))
-
-  (let loop ([attempts 1])
+  (define (request u path&query
+                   #:attempts [attempts 1]
+                   #:method [method method]
+                   #:history [history null]
+                   #:redirects [redirects-remaining max-redirects])
     (define c (session-lease s u timeouts))
     (with-handlers ([exn:fail?
                      (lambda (e)
@@ -125,7 +126,9 @@
                        (cond
                          [(< attempts max-attempts)
                           (log-http-easy-debug "retrying~n  attempts: ~a/~a" attempts max-attempts)
-                          (loop (add1 attempts))]
+                          (request u path&query
+                                   #:attempts (add1 attempts)
+                                   #:history history)]
 
                          [else
                           (raise e)]))])
@@ -143,47 +146,39 @@
         (make-response resp-status
                        resp-headers
                        resp-out
+                       history
                        (lambda (_)
                          (session-release s u c))))
 
       (cond
-        [(and (positive? max-redirects) (redirect? resp))
+        [(and (positive? redirects-remaining) (redirect? resp))
          (define location:bs (response-headers-ref resp 'location))
-         (define location (string->url (bytes->string/utf-8 location:bs)))
-         (define target
-           (cond
-             [(url-host location) location]
-             [else (struct-copy url u
-                                [path (url-path location)]
-                                [query (url-query location)])]))
+         (define-values (u* path&query*)
+           (->url&path location:bs null))
          (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location:bs)
          (response-drain! resp)
          (response-close! resp)
-         (session-request s
-                          target
-                          #:drain? drain?
-                          #:close? close?
-                          #:method (case (response-status-code resp)
-                                     [(301 302) 'get]
-                                     [(303)     'get]
-                                     [(307)     method])
-                          #:headers headers
-                          #:timeouts timeouts
-                          #:max-attempts max-attempts
-                          #:max-redirects (sub1 max-redirects))]
+         (request (if (url-host u*) u* u) path&query*
+                  #:method (case (response-status-code resp)
+                             [(301 302) 'get]
+                             [(303)     'get]
+                             [(307)     method])
+                  #:history (cons resp history)
+                  #:redirects (sub1 redirects-remaining))]
 
-        [drain?
+        [(or close? drain?)
          (begin0 resp
            (response-drain! resp)
            (response-close! resp))]
 
-        [close?
-         (begin0 resp
-           (response-close! resp))]
-
         [else
          (begin0 resp
-           (will-register executor resp response-close!))]))))
+           (will-register executor resp response-close!))])))
+
+  (define-values (u path&query)
+    (->url&path string-or-url params))
+
+  (request u path&query))
 
 (define (->url&path string-or-url params)
   (define u

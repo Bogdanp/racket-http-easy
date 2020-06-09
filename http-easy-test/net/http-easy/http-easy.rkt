@@ -7,9 +7,12 @@
          (only-in web-server/http
                   binding-id
                   binding:form-value
+                  header-value
+                  headers-assq*
                   permanently
                   redirect-to
                   request-bindings/raw
+                  request-headers/raw
                   request-post-data/raw
                   response/output
                   see-other
@@ -63,6 +66,16 @@
                          ("a" . "1")
                          ("a" . "2")
                          ("b" . "3"))))))
+
+    (test-case "#:close? sends 'Connection: close' header"
+      (call-with-web-server
+       (lambda (req)
+         (response/output
+          (lambda (out)
+            (write (header-value (headers-assq* #"connection" (request-headers/raw req))) out))))
+       (lambda ()
+         (check-equal? (read (open-input-bytes (response-body (get "http://127.0.0.1:9911" #:close? #t))))
+                       #"close"))))
 
     (test-suite
      "bodies"

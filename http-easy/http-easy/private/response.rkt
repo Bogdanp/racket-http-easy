@@ -17,6 +17,7 @@
  response-headers
  response-headers-ref
  response-headers-ref*
+ response-history
  response-output
  response-body
  response-json
@@ -32,6 +33,7 @@
    headers
    output
    [data #:mutable]
+   history
    closer
    [closed? #:mutable]))
 
@@ -41,8 +43,8 @@
 (define status-code/c
   (integer-in 100 999))
 
-(define/contract (make-response status headers out closer)
-  (-> bytes? (listof bytes?) input-port? response-closer/c response?)
+(define/contract (make-response status headers out history closer)
+  (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response?)
   (match status
     [(regexp #rx"^HTTP/(...) ([1-9][0-9][0-9]) (.*)$"
              (list status-line
@@ -57,6 +59,7 @@
                headers
                out
                #f
+               history
                closer
                #f)]
 
