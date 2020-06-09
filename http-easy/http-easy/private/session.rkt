@@ -3,6 +3,7 @@
 (require net/http-client
          net/uri-codec
          net/url
+         openssl
          racket/contract
          racket/format
          racket/match
@@ -24,12 +25,16 @@
 
 (define default-pool-config (make-pool-config))
 
-(struct session (sema conf pools [closed? #:mutable])
+(struct session (sema conf pools ssl-ctx [closed? #:mutable])
   #:transparent)
 
-(define/contract (make-session [conf default-pool-config])
-  (->* () (pool-config?) session?)
-  (define s (session (make-semaphore 1) conf (make-hash) #f))
+(define/contract (make-session #:pool-config [conf default-pool-config]
+                               #:ssl-context [ssl-ctx (ssl-secure-client-context)])
+  (->* ()
+       (#:pool-config pool-config?
+        #:ssl-context ssl-client-context?)
+       session?)
+  (define s (session (make-semaphore 1) conf (make-hash) ssl-ctx #f))
   (begin0 s
     (will-register executor s session-close!)
     (log-http-easy-debug "session opened")))
@@ -51,7 +56,8 @@
     (call-with-semaphore (session-sema s)
       (lambda ()
         (hash-ref! ps k (lambda ()
-                          (define connector (make-url-connector url))
+                          (define ssl-ctx (session-ssl-ctx s))
+                          (define connector (make-url-connector url ssl-ctx))
                           (make-pool (session-conf s) connector))))))
 
   (pool-lease p timeouts))
@@ -209,14 +215,14 @@
 
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define ((make-url-connector u) conn)
+(define ((make-url-connector u ssl-ctx) conn)
   (match-define (struct* url ([scheme s] [host h] [port p])) u)
   (begin0 conn
     (if (http-conn-live? conn)
         (http-conn-enliven! conn)
         (http-conn-open! conn h
                          #:port (or p (if (equal? s "https") 443 80))
-                         #:ssl? (equal? s "https")
+                         #:ssl? (and (equal? s "https") ssl-ctx)
                          #:auto-reconnect? #t))))
 
 (define (headers->list headers)

@@ -4,18 +4,28 @@
           racket/sandbox
           scribble/example
           (for-label json
-                     racket/base
-                     racket/contract
                      net/http-easy
-                     net/url))
+                     net/url
+                     openssl
+                     racket/base
+                     racket/contract))
 
 @title{@tt{http-easy}: a high-level HTTP client}
 @author[(author+email "Bogdan Popa" "bogdan@defn.io")]
 @defmodule[net/http-easy]
 
 This library wraps @tt{net/http-client} to provide a simpler
-interface.  It handles connection pooling, timeouts, following
-redirects, cookie storage, etc. automatically.
+interface.  It automatically handles:
+
+@itemlist[
+  @item{connection pooling}
+  @item{connection timeouts}
+  @item{SSL verification}
+  @item{cookie storage}
+  @item{file uploads}
+  @item{redirect following}
+  @item{streaming responses}
+]
 
 The API is currently in flux so be aware that it may change before the
 final release.
@@ -134,10 +144,17 @@ The input port representing the response body can be accessed using
   Returns @racket[#t] when @racket[v] is a session value.
 }
 
-@defproc[(make-session [conf pool-config? (make-pool-config)]) session?]{
-  Produces a @racket[session?] value with @racket[conf] as its
+@defproc[(make-session [#:pool-config pool-config pool-config? (make-pool-config)]
+                       [#:ssl-context ssl-context ssl-client-context? (ssl-secure-client-context)]) session?]{
+  Produces a @racket[session?] value with @racket[pool-config] as its
   connection pool configuration.  Each requested scheme, host and port
   pair has its own connection pool.
+
+  The @racket[ssl-context] argument controls how HTTPS connections are
+  handled.  The default implementation verifies TLS certificates,
+  verifies hostnames and avoids using weak ciphers.  To use a custom
+  certificate chain or private key, you can use
+  @racket[ssl-make-client-context].
 }
 
 @defproc[(session-close! [s session?]) void?]{
