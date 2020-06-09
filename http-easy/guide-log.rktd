@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Tue, 09 Jun 2020 10:42:11 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Tue, 09 Jun 2020 11:01:24 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -79,3 +79,32 @@
   (c values c (h - () (authenticated . #t) (token u . "secret-api-key"))))
  #""
  #"")
+((define res
+   (response-json
+    (post "https://httpbin.org/post" #:form '((a . "hello") (b . "there")))))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref res 'form)
+ ((3) 0 () 0 () () (c values c (h - () (b u . "there") (a u . "hello"))))
+ #""
+ #"")
+((define res
+   (response-json
+    (post
+     "https://httpbin.org/anything"
+     #:json
+     (hasheq 'a "hello" 'b "there"))))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref res 'json)
+ ((3) 0 () 0 () () (c values c (h - () (b u . "there") (a u . "hello"))))
+ #""
+ #"")
+((define res
+   (response-json (post "https://httpbin.org/anything" #:data #"hello")))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref res 'data) ((3) 0 () 0 () () (c values c (u . "hello"))) #"" #"")

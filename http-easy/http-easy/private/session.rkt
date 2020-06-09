@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require net/http-client
+(require json
+         net/http-client
          net/uri-codec
          net/url
          openssl
@@ -85,6 +86,14 @@
 
 (define default-timeout-config (make-timeout-config))
 
+(define unsupplied
+  (let ()
+    (struct unsupplied ())
+    (values (unsupplied))))
+
+(define (supplied? v)
+  (not (eq? v unsupplied)))
+
 ;; TODO: Write timeouts.
 ;; TODO: Read timeouts.
 (define/contract (session-request s
@@ -96,6 +105,8 @@
                                   #:params [params null]
                                   #:auth [auth #f]
                                   #:data [data #f]
+                                  #:form [form unsupplied]
+                                  #:json [json unsupplied]
                                   #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
                                   #:max-redirects [max-redirects 16])
@@ -107,6 +118,8 @@
         #:params query-params/c
         #:auth (or/c false/c auth-procedure/c)
         #:data (or/c false/c bytes? string? input-port?)
+        #:form query-params/c
+        #:json jsexpr?
         #:timeouts timeout-config?
         #:max-attempts exact-positive-integer?
         #:max-redirects exact-nonnegative-integer?)
@@ -118,6 +131,9 @@
                    #:headers [headers headers]
                    #:params [params params]
                    #:auth [auth auth]
+                   #:data [data data]
+                   #:form [form form]
+                   #:json [json json]
                    #:history [history null]
                    #:redirects [redirects-remaining max-redirects])
     (define-values (headers* params*)
@@ -144,10 +160,16 @@
          c path&query
          #:close? close?
          #:method (method->bytes method)
-         #:headers (headers->list headers*)
-         #:data (if (input-port? data)
-                    (port->data-procedure data)
-                    data)))
+         #:headers (headers->list
+                    (cond
+                      [(supplied? json) (hash-set headers* 'content-type #"application/json; charset=utf-8")]
+                      [(supplied? form) (hash-set headers* 'content-type #"application/x-www-form-urlencoded; charset=utf-8")]
+                      [else headers*]))
+         #:data (cond
+                  [(supplied? json) (jsexpr->bytes json)]
+                  [(supplied? form) (alist->form-urlencoded form)]
+                  [(input-port? data) (port->data-procedure data)]
+                  [else data])))
       (log-http-easy-debug "response: ~.s" resp-status)
       (define resp
         (make-response resp-status

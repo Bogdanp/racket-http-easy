@@ -156,6 +156,46 @@ The above is equivalent to:
                (values (hash-set headers 'authorization "Bearer secret-api-key") params))))
 ]
 
+@subsection{Sending Data}
+
+You can supply a list of pairs to be sent as a
+@tt{application/x-www-form-urlencoded} payload:
+
+@interaction[
+#:eval he-eval
+(define res
+ (response-json
+  (post "https://httpbin.org/post"
+        #:form '((a . "hello")
+                 (b . "there")))))
+(hash-ref res 'form)
+]
+
+Alternatively, you can supply the @racket[#:json] keyword argument to
+send a @tt{application/json} payload:
+
+@interaction[
+#:eval he-eval
+(define res
+ (response-json
+  (post "https://httpbin.org/anything"
+        #:json (hasheq 'a "hello"
+                       'b "there"))))
+(hash-ref res 'json)
+]
+
+To send data using arbitrary formats, you can use the @racket[#:data]
+keyword argument:
+
+@interaction[
+#:eval he-eval
+(define res
+ (response-json
+  (post "https://httpbin.org/anything"
+        #:data #"hello")))
+(hash-ref res 'data)
+]
+
 
 @section{Reference}
 
@@ -167,6 +207,8 @@ The above is equivalent to:
                [#:params params query-params/c null]
                [#:auth auth (or/c false/c auth-procedure/c) #f]
                [#:data data (or/c false/c bytes? string? input-port?) #f]
+               [#:form form query-params/c _unsupplied]
+               [#:json json jsexpr? _unsupplied]
                [#:timeouts timeouts timeout-config? (make-timeout-config)]
                [#:max-attempts max-attempts exact-positive-integer? 3]
                [#:max-redirects max-redirects exact-nonnegative-integer? 16]) response? t ...))
@@ -230,6 +272,8 @@ The above is equivalent to:
                           [#:params params query-params/c null]
                           [#:auth auth (or/c false/c auth-procedure/c) #f]
                           [#:data data (or/c false/c bytes? string? input-port?) #f]
+                          [#:form form query-params/c _unsupplied]
+                          [#:json json jsexpr? _unsupplied]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
                           [#:max-attempts max-attempts exact-positive-integer? 3]
                           [#:max-redirects max-redirects exact-nonnegative-integer? 16]) response?]{
