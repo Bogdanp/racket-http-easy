@@ -8,20 +8,17 @@
          racket/format
          racket/match
          "common.rkt"
+         "contract.rkt"
          "logger.rkt"
          "pool.rkt"
          "response.rkt"
          "timeout.rkt")
 
 (provide
- method/c
  make-session
  session?
  session-close!
  session-request)
-
-(define method/c
-  (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?))
 
 (define default-pool-config (make-pool-config))
 
@@ -91,12 +88,13 @@
 ;; TODO: Write timeouts.
 ;; TODO: Read timeouts.
 (define/contract (session-request s
-                                  string-or-url
+                                  urlish
                                   #:drain? [drain? #t]
                                   #:close? [close? #f]
                                   #:method [method 'get]
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
+                                  #:auth [auth #f]
                                   #:data [data #f]
                                   #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
@@ -105,19 +103,28 @@
        (#:drain? boolean?
         #:close? boolean?
         #:method method/c
-        #:headers (hash/c symbol? (or/c bytes? string?))
-        #:params (listof (cons/c symbol? (or/c false/c string?)))
+        #:headers headers/c
+        #:params query-params/c
+        #:auth (or/c false/c auth-procedure/c)
         #:data (or/c false/c bytes? string? input-port?)
         #:timeouts timeout-config?
         #:max-attempts exact-positive-integer?
         #:max-redirects exact-nonnegative-integer?)
        response?)
 
-  (define (request u path&query
+  (define (request u
                    #:attempts [attempts 1]
                    #:method [method method]
+                   #:headers [headers headers]
+                   #:params [params params]
+                   #:auth [auth auth]
                    #:history [history null]
                    #:redirects [redirects-remaining max-redirects])
+    (define-values (headers* params*)
+      (if auth
+          (auth u headers params)
+          (values headers params)))
+    (define path&query (make-path&query u params*))
     (define c (session-lease s u timeouts))
     (with-handlers ([exn:fail?
                      (lambda (e)
@@ -137,7 +144,7 @@
          c path&query
          #:close? close?
          #:method (method->bytes method)
-         #:headers (headers->list headers)
+         #:headers (headers->list headers*)
          #:data (if (input-port? data)
                     (port->data-procedure data)
                     data)))
@@ -153,16 +160,17 @@
       (cond
         [(and (positive? redirects-remaining) (redirect? resp))
          (define location:bs (response-headers-ref resp 'location))
-         (define-values (u* path&query*)
-           (->url&path location:bs null))
+         (define u* (ensure-absolute-url (->url location:bs) u))
          (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location:bs)
          (response-drain! resp)
          (response-close! resp)
-         (request (if (url-host u*) u* u) path&query*
+         (request u*
                   #:method (case (response-status-code resp)
                              [(301 302) 'get]
                              [(303)     'get]
                              [(307)     method])
+                  #:headers (hash-remove headers 'authorization)
+                  #:auth (if (same-origin? u* u) auth #f)
                   #:history (cons resp history)
                   #:redirects (sub1 redirects-remaining))]
 
@@ -175,24 +183,38 @@
          (begin0 resp
            (will-register executor resp response-close!))])))
 
-  (define-values (u path&query)
-    (->url&path string-or-url params))
+  (request (->url urlish)))
 
-  (request u path&query))
+(define (->url urlish)
+  (cond
+    [(url? urlish) urlish]
+    [(bytes? urlish) (string->url (bytes->string/utf-8 urlish))]
+    [else (string->url urlish)]))
 
-(define (->url&path string-or-url params)
-  (define u
-    (cond
-      [(url? string-or-url) string-or-url]
-      [(bytes? string-or-url) (string->url (bytes->string/utf-8 string-or-url))]
-      [else (string->url string-or-url)]))
+(define (make-path&query u params)
   (define path (url-path-string u))
   (define all-params (append (url-query u) params))
-  (define path&query
-    (if (null? all-params)
-        path
-        (string-append path "?" (alist->form-urlencoded all-params))))
-  (values u path&query))
+  (cond
+    [(null? all-params) path]
+    [else (string-append path "?" (alist->form-urlencoded all-params))]))
+
+(define (ensure-absolute-url u* u)
+  (cond
+    [(and (url-scheme u*)
+          (url-host u*)
+          (url-port u*))
+     u*]
+
+    [else
+     (struct-copy url u*
+                  [scheme (url-scheme u)]
+                  [host (url-host u)]
+                  [port (url-port u)])]))
+
+(define (same-origin? a b)
+  (and (equal? (url-scheme a) (url-scheme b))
+       (equal? (url-host a) (url-host b))
+       (equal? (url-port a) (url-port b))))
 
 (define (redirect? resp)
   (case (response-status-code resp)

@@ -23,16 +23,22 @@ interface.  It automatically handles:
   @item{SSL verification}
   @item{automatic decompression}
   @item{streaming responses}
-  @item{digest authentication}
+  @item{authentication}
   @item{redirect following}
 ]
 
 The following features are currently planned:
 
 @itemlist[
-  @item{HTTP/2 and HTTP/3 support}
+  @item{HTTP proxy support}
   @item{multipart file uploads}
   @item{cookie storage}
+]
+
+The following features may be supported in the future:
+
+@itemlist[
+  @item{HTTP/2 and HTTP/3 support}
 ]
 
 The API is currently in flux so be aware that it may change before the
@@ -86,11 +92,14 @@ response returns its underlying connection to the pool:
 (response-close! res)
 ]
 
+@(define sr (secref "guide:streaming"))
+
 If you forget to manually close a response, its underlying connection
 will get returned to the pool when the response gets
-garbage-collected.
+garbage-collected.  Unless you explicitly use @sr, you don't have to
+worry about this much.
 
-@subsection{Streaming Responses}
+@subsection[#:tag "guide:streaming"]{Streaming Responses}
 
 Response bodies can be streamed by passing @racket[#f] as the
 @racket[#:drain?] argument to any of the requesters:
@@ -111,6 +120,42 @@ The input port representing the response body can be accessed using
 (read-string 5 (response-output res))
 ]
 
+@subsection{Authenticating Requests}
+
+The library provides an auth procedure for HTTP basic auth:
+
+@interaction[
+#:eval he-eval
+(response-status-line
+ (get "https://httpbin.org/basic-auth/Aladdin/OpenSesame"))
+]
+
+@interaction[
+#:eval he-eval
+(response-json
+ (get "https://httpbin.org/basic-auth/Aladdin/OpenSesame"
+      #:auth (auth/basic "Aladdin" "OpenSesame")))
+]
+
+And for bearer auth:
+
+@interaction[
+#:eval he-eval
+(response-json
+ (get "https://httpbin.org/bearer"
+      #:auth (auth/bearer "secret-api-key")))
+]
+
+The above is equivalent to:
+
+@interaction[
+#:eval he-eval
+(response-json
+ (get "https://httpbin.org/bearer"
+      #:auth (lambda (uri headers params)
+               (values (hash-set headers 'authorization "Bearer secret-api-key") params))))
+]
+
 
 @section{Reference}
 
@@ -118,8 +163,9 @@ The input port representing the response body can be accessed using
   (defproc (id [uri (or/c bytes? string? url?)]
                [#:drain? drain? boolean? #t]
                [#:close? close? boolean? #f]
-               [#:headers headers (hash/c symbol? (or/c bytes? string?)) (hasheq)]
-               [#:params params (listof (cons/c symbol? (or/c false/c string?))) null]
+               [#:headers headers headers/c (hasheq)]
+               [#:params params query-params/c null]
+               [#:auth auth (or/c false/c auth-procedure/c) #f]
                [#:data data (or/c false/c bytes? string? input-port?) #f]
                [#:timeouts timeouts timeout-config? (make-timeout-config)]
                [#:max-attempts max-attempts exact-positive-integer? 3]
@@ -141,6 +187,12 @@ The input port representing the response body can be accessed using
 
 
 @subsection{Sessions}
+
+@deftogether[(
+  @defthing[method/c (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?)]
+  @defthing[headers/c (hash/c symbol? (or/c bytes? string?))]
+  @defthing[query-params/c (listof (cons/c symbol? (or/c false/c string?)))]
+)]
 
 @defparam[current-session session session? #:value (make-session)]{
   Holds the current session that is used by the @racket[delete],
@@ -173,9 +225,10 @@ The input port representing the response body can be accessed using
                           [uri (or/c bytes? string? url?)]
                           [#:drain? drain? boolean? #t]
                           [#:close? close? boolean? #f]
-                          [#:method method symbol? 'get]
-                          [#:headers headers (hash/c symbol? (or/c bytes? string?)) (hasheq)]
-                          [#:params params (listof (cons/c symbol? (or/c false/c string?))) null]
+                          [#:method method method/c 'get]
+                          [#:headers headers headers/c (hasheq)]
+                          [#:params params query-params/c null]
+                          [#:auth auth (or/c false/c auth-procedure/c) #f]
                           [#:data data (or/c false/c bytes? string? input-port?) #f]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
                           [#:max-attempts max-attempts exact-positive-integer? 3]
@@ -203,11 +256,23 @@ The input port representing the response body can be accessed using
   are specified via both arguments, then the list of @racket[params]
   is appended to those already in the @racket[uri].
 
+  The @racket[auth] argument allows authentication headers and query
+  params to be added to the request.  When following redirects, the
+  auth procedure is applied to subsequent requests only if the target
+  URL has the @tech{same origin} as the original request.
+
   The @racket[max-redirects] argument controls how many redirects are
-  followed by the request.  Redirect cycles are not currently
-  detected.  To disable redirect following, set this argument to
-  @racket[0].
+  followed by the request.  Redirect cycles are not detected.  To
+  disable redirect following, set this argument to @racket[0].  The
+  @tt{Authorization} header is stripped from redirect requests if the
+  target URL does not have the @tech{same origin} as the original
+  request.
 }
+
+@subsection{Origins}
+
+Two request URLs are considered to have the @deftech{same origin} if
+their scheme, hostname and port are the same.
 
 
 @subsection{Responses}
@@ -257,7 +322,7 @@ The input port representing the response body can be accessed using
   string.
 }
 
-@defproc[(response-json [r response?]) jsexpr?]{
+@defproc[(response-json [r response?]) (or/c eof-object? jsexpr?)]{
   Drains @racket[r]'s output port, parses the data as JSON and returns
   it.  An exception is raised if the data is not valid JSON.
 }
@@ -294,6 +359,28 @@ The input port representing the response body can be accessed using
 
   The @racket[idle-timeout] argument controls the amount of time idle
   connections are kept open for.
+}
+
+
+@subsection{Authentication}
+
+@defthing[auth-procedure/c (-> url? headers/c query-params/c (values headers/c query-params/c))]{
+  The contract for auth procedures.  An auth procedure takes the
+  current request url, headers and query params and returns a new set
+  of headers and query params augmented with authentication
+  information.
+}
+
+@defproc[(auth/basic [username (or/c bytes? string?)]
+                     [password (or/c bytes? string?)]) auth-procedure/c]{
+
+  Generates an auth procedure that authenticates requests using HTTP
+  basic auth.
+}
+
+@defproc[(auth/bearer [token (or/c bytes? string?)]) auth-procedure/c]{
+  Generates an auth procedure that authenticates requests using the
+  given bearer @racket[token].
 }
 
 

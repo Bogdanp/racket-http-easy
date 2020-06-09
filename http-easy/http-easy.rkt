@@ -3,6 +3,8 @@
 (require (for-syntax racket/base
                      syntax/parse)
          racket/contract
+         "http-easy/private/auth.rkt"
+         "http-easy/private/contract.rkt"
          "http-easy/private/error.rkt"
          "http-easy/private/pool.rkt"
          "http-easy/private/response.rkt"
@@ -22,6 +24,8 @@
  make-timeout-config
  timeout-config?
 
+ (all-from-out "http-easy/private/auth.rkt")
+ (all-from-out "http-easy/private/contract.rkt")
  (all-from-out "http-easy/private/response.rkt")
  (all-from-out "http-easy/private/session.rkt")
 

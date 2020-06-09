@@ -85,7 +85,7 @@
   (response-data r))
 
 (define/contract (response-json r)
-  (-> response? jsexpr?)
+  (-> response? (or/c eof-object? jsexpr?))
   (bytes->jsexpr (response-body r)))
 
 (define/contract (response-drain! r)

@@ -2,11 +2,13 @@
 
 (require net/http-easy
          net/url
+         racket/match
          rackunit
          web-server/dispatch
          (only-in web-server/http
                   binding-id
                   binding:form-value
+                  header
                   header-value
                   headers-assq*
                   permanently
@@ -92,6 +94,27 @@
           (check-equal? (response-body (post "http://127.0.0.1:9911" #:data (open-input-string "hello"))) #"hello")))))
 
     (test-suite
+     "auth"
+
+     (test-case "can authenticate requests"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           (lambda (out)
+             (match (headers-assq* #"authorization" (request-headers/raw req))
+               [(header #"authorization" #"Basic QWxhZGRpbjpPcGVuU2VzYW1l")
+                (write 'ok out)]
+
+               [_
+                (write 'fail out)]))))
+        (lambda ()
+          (check-equal? (read (response-output (get "http://127.0.0.1:9911" #:drain? #f))) 'fail)
+          (check-equal? (read (response-output (get "http://127.0.0.1:9911"
+                                                    #:drain? #f
+                                                    #:auth (auth/basic "Aladdin" "OpenSesame"))))
+                        'ok)))))
+
+    (test-suite
      "redirects"
 
      (test-case "30[12] redirects"
@@ -161,7 +184,43 @@
        (call-with-web-server
         dispatch
         (lambda ()
-          (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))))))
+          (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))
+
+     (test-case "redirects to other origins discard auth"
+       (define-values (dispatch _)
+         (dispatch-rules
+          [("")
+           (lambda (_)
+             (redirect-to "/a"))]
+
+          [("a")
+           (lambda (_)
+             (redirect-to "http://127.0.0.1:9912"))]))
+
+       (call-with-web-server
+        #:port 9912
+        (lambda (req)
+          (response/output
+           (lambda (out)
+             (if (headers-assq* #"authorization" (request-headers/raw req))
+                 (write 'fail out)
+                 (write 'ok out)))))
+        (lambda ()
+          (call-with-web-server
+           (lambda (req)
+             (match (headers-assq* #"authorization" (request-headers/raw req))
+               [(header #"authorization" #"Basic QWxhZGRpbjpPcGVuU2VzYW1l")
+                (dispatch req)]
+
+               [_
+                (response/output
+                 (lambda (out)
+                   (write 'fail/auth out)))]))
+           (lambda ()
+             (check-equal? (read (response-output (get "http://127.0.0.1:9911"
+                                                       #:drain? #f
+                                                       #:auth (auth/basic "Aladdin" "OpenSesame"))))
+                           'ok))))))))))
 
 (module+ test
   (require rackunit/text-ui)
