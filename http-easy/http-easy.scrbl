@@ -188,10 +188,13 @@ The input port representing the response body can be accessed using
   @racket[close?] argument is @racket[#t], this is done
   automatically.  Ditto if the responses are garbage-collected.
 
-  If the @racket[drain?] argument is @racket[#t], then the response's
-  output port is drained and the resulting byte string is stored on
-  the response value.  The drained data is accessible using the
-  @racket[response-body] function.
+  If the @racket[drain?] argument is @racket[#t] (the default), then
+  the response's output port is drained and the resulting byte string
+  is stored on the response value.  The drained data is accessible
+  using the @racket[response-body] function.
+
+  If the @racket[close?] argument is @racket[#t], then the response's
+  output port is drained and the connection is closed.
 
   The @racket[method] argument specifies the HTTP request method to use.
 
