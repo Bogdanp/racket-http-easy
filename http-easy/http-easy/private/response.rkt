@@ -1,6 +1,9 @@
 #lang racket/base
 
-(require json
+(require (for-syntax racket/base
+                     syntax/parse
+                     "common.rkt")
+         json
          racket/contract
          racket/match
          racket/port
@@ -114,3 +117,37 @@
         (copy-port (response-output r) (open-output-nowhere))
         ((response-closer r) r)
         (set-response-closed?! r #t)))))
+
+
+;; match expanders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(provide
+ (rename-out [response:me response]))
+
+(define-match-expander heads
+  (syntax-parser
+    ([_ (name:id value:expr) ... (~optional rst)]
+     #:with (head-re ...)
+     (for/list ([name (syntax->datum #'(name ...))])
+       (datum->syntax #'name (bytes-append #"^(?i:" (symbol->bytes name) #"): (.*)")))
+     #'(list-no-order (regexp head-re (list _ value)) ... (~? rst _) (... ...)))))
+
+(define-match-expander response:me
+  (syntax-parser
+    ([_ (~alt (~optional (~seq #:status-line line))
+              (~optional (~seq #:status-code code))
+              (~optional (~seq #:status-message message))
+              (~optional (~seq #:http-version version))
+              (~optional (~seq #:history history))
+              (~optional (~seq #:headers (headers ...) (~optional rst)))
+              (~optional (~seq #:body body))
+              (~optional (~seq #:json json))) ...]
+     #'(? response?
+          (~? (app response-status-line line))
+          (~? (app response-status-code code))
+          (~? (app response-status-message message))
+          (~? (app response-http-version version))
+          (~? (app response-history history))
+          (~? (app response-headers (heads headers ... (~? rst))))
+          (~? (app response-body body))
+          (~? (app response-json json))))))

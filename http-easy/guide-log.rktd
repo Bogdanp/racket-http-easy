@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Tue, 09 Jun 2020 21:05:31 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Fri, 12 Jun 2020 08:04:14 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -133,4 +133,16 @@
   (printf "~a: ~a" (ua-cookie-name c) (ua-cookie-value c)))
  ((3) 0 () 0 () () (c values c (void)))
  #"hello: world"
+ #"")
+((require racket/match) ((3) 0 () 0 () () (c values c (void))) #"" #"")
+((match
+  (get "https://example.com")
+  ((response
+    #:status-code
+    200
+    #:headers
+    ((content-type (and (regexp #"text/html") the-content-type))))
+   the-content-type))
+ ((3) 0 () 0 () () (c values c (u . #"text/html; charset=UTF-8")))
+ #""
  #"")

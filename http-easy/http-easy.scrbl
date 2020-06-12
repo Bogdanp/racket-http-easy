@@ -11,7 +11,8 @@
                      openssl
                      racket/base
                      racket/class
-                     racket/contract))
+                     racket/contract
+                     racket/match))
 
 @title{@tt{http-easy}: a high-level HTTP client}
 @author[(author+email "Bogdan Popa" "bogdan@defn.io")]
@@ -369,6 +370,35 @@ their scheme, hostname and port are the same.
 
 @defproc[(response? [v any/c]) boolean?]{
   Returns @racket[#t] when @racket[v] is a response.
+}
+
+@defform[
+  (response clause ...)
+  #:grammar ([clause (code:line #:status-line e)
+                     (code:line #:status-code e)
+                     (code:line #:status-message e)
+                     (code:line #:http-version e)
+                     (code:line #:history e)
+                     (code:line #:headers heads maybe-rest)
+                     (code:line #:body e)
+                     (code:line #:json e)]
+             [heads ([header-id e] ...)]
+             [maybe-rest (code:line)
+                         e])]{
+
+  A match expander for @racket[response?] values.
+
+  @interaction[
+  #:eval he-eval
+  (require racket/match)
+
+  (code:line)
+  (match (get "https://example.com")
+   [(response
+     #:status-code 200
+     #:headers ([content-type (and (regexp #"text/html") the-content-type)]))
+    the-content-type])
+  ]
 }
 
 @deftogether[(
