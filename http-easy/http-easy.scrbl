@@ -18,8 +18,8 @@
 @author[(author+email "Bogdan Popa" "bogdan@defn.io")]
 @defmodule[net/http-easy]
 
-This library wraps @tt{net/http-client} to provide a simpler
-interface.  It automatically handles:
+This library wraps @tt{net/http-client} to provide a simple interface
+for day-to-day use.  It automatically handles:
 
 @itemlist[
   @item{connection pooling}
@@ -265,6 +265,7 @@ your @racket[session?]:
 @deftogether[(
   @defthing[method/c (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?)]
   @defthing[headers/c (hash/c symbol? (or/c bytes? string?))]
+  @defthing[form-data/c (listof (cons/c symbol? (or/c false/c string?)))]
   @defthing[query-params/c (listof (cons/c symbol? (or/c false/c string?)))]
 )]
 
@@ -309,7 +310,7 @@ your @racket[session?]:
                           [#:params params query-params/c null]
                           [#:auth auth (or/c false/c auth-procedure/c) #f]
                           [#:data data (or/c false/c bytes? string? input-port? data-procedure/c) #f]
-                          [#:form form query-params/c _unsupplied]
+                          [#:form form form-data/c _unsupplied]
                           [#:json json jsexpr? _unsupplied]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
                           [#:max-attempts max-attempts exact-positive-integer? 3]

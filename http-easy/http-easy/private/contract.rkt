@@ -6,6 +6,7 @@
 (provide
  method/c
  headers/c
+ form-data/c
  query-params/c
  auth-procedure/c)
 
@@ -14,6 +15,9 @@
 
 (define headers/c
   (hash/c symbol? (or/c bytes? string?)))
+
+(define form-data/c
+  (listof (cons/c symbol? (or/c false/c string?))))
 
 (define query-params/c
   (listof (cons/c symbol? (or/c false/c string?))))

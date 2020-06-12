@@ -110,7 +110,7 @@
         #:params [params query-params/c]
         #:auth [auth (or/c false/c auth-procedure/c)]
         #:data [data (or/c false/c bytes? string? input-port? data-procedure/c)]
-        #:form [form query-params/c]
+        #:form [form form-data/c]
         #:json [json jsexpr?]
         #:timeouts [timeouts timeout-config?]
         #:max-attempts [max-attempts exact-positive-integer?]
