@@ -12,11 +12,14 @@
          racket/match
          "common.rkt"
          "contract.rkt"
+         "error.rkt"
          "logger.rkt"
          "pool.rkt"
          "response.rkt"
          "timeout.rkt"
          "user-agent.rkt")
+
+;; session ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide
  make-session
@@ -24,7 +27,8 @@
  session-close!
  session-request)
 
-(define default-pool-config (make-pool-config))
+(define default-pool-config
+  (make-pool-config))
 
 (struct session (sema conf pools ssl-ctx cookies [closed? #:mutable])
   #:transparent)
@@ -76,36 +80,8 @@
   (when p
     (pool-release p c)))
 
-(define (pool-key u)
-  (~a (or (url-scheme u)
-          (case (url-port u)
-            [(443) "https"]
-            [else "http"]))
-      "://"
-      (url-host u)
-      ":"
-      (or (url-port u)
-          (case (url-scheme u)
-            [("https") 443]
-            [else 80]))))
-
-(define (maybe-add-cookie-header s u headers)
-  (cond
-    [(session-cookies s)
-     => (lambda (cookie-jar)
-          (parameterize ([current-cookie-jar cookie-jar])
-            (define hdr (cookie-header u))
-            (if hdr (hash-set headers 'cookie hdr) headers)))]
-
-    [else headers]))
-
-(define (maybe-save-cookies! s u headers/raw)
-  (define cookie-jar (session-cookies s))
-  (when cookie-jar
-    (parameterize ([current-cookie-jar cookie-jar])
-      (extract-and-save-cookies! headers/raw u))))
-
-(define default-timeout-config (make-timeout-config))
+(define default-timeout-config
+  (make-timeout-config))
 
 (define supplied?
   (compose1 not unsupplied-arg?))
@@ -175,7 +151,11 @@
         (values headers params)))
     (define path&query (make-path&query u params*))
     (define c (session-lease s u timeouts))
-    (with-handlers ([exn:fail?
+    (with-handlers ([exn:fail:http-easy?
+                     (lambda (e)
+                       (raise e))]
+
+                    [exn:fail?
                      (lambda (e)
                        (log-http-easy-warning "connection failed: ~a" (exn-message e))
                        (session-release s u c)
@@ -188,26 +168,47 @@
 
                          [else
                           (raise e)]))])
-      (define-values (resp-status resp-headers resp-out)
-        (http-conn-sendrecv!
-         c path&query
-         #:close? close?
-         #:method (method->bytes method)
-         #:headers (headers->list headers*)
-         #:data (cond
-                  [(supplied? json) (jsexpr->bytes json)]
-                  [(supplied? form) (alist->form-urlencoded form)]
-                  [(input-port? data) (port->data-procedure data)]
-                  [else data])))
-      (log-http-easy-debug "response: ~.s" resp-status)
-      (maybe-save-cookies! s u resp-headers)
+      (define resp-ch (make-channel))
+      (define thd
+        (thread
+         (lambda ()
+           (with-handlers ([exn:fail? (lambda (e)
+                                        (channel-put resp-ch e))])
+             (define-values (resp-status resp-headers resp-out)
+               (http-conn-sendrecv!
+                c path&query
+                #:close? close?
+                #:method (method->bytes method)
+                #:headers (headers->list headers*)
+                #:data (cond
+                         [(supplied? json) (jsexpr->bytes json)]
+                         [(supplied? form) (alist->form-urlencoded form)]
+                         [(input-port? data) (port->data-procedure data)]
+                         [else data])))
+
+             (channel-put resp-ch (make-response resp-status
+                                                 resp-headers
+                                                 resp-out
+                                                 history
+                                                 (lambda (_)
+                                                   (session-release s u c))))))))
       (define resp
-        (make-response resp-status
-                       resp-headers
-                       resp-out
-                       history
-                       (lambda (_)
-                         (session-release s u c))))
+        (sync
+         (handle-evt
+          resp-ch
+          (lambda (resp-or-exn)
+            (if (exn:fail? resp-or-exn)
+                (raise resp-or-exn)
+                resp-or-exn)))
+         (handle-evt
+          (alarm-evt (+ (current-inexact-milliseconds)
+                        (* (timeout-config-request timeouts) 1000)))
+          (lambda (_)
+            (kill-thread thd)
+            (session-release s u c)
+            (raise (make-timeout-error 'request))))))
+      (log-http-easy-debug "response: ~.s" (response-status-line resp))
+      (maybe-save-cookies! s u (response-headers resp))
 
       (cond
         [(and (positive? redirects-remaining) (redirect? resp))
@@ -306,9 +307,43 @@
                                                [else (string->bytes/utf-8 value)]))))
 
 (define ((port->data-procedure inp) write-chunk)
-  (define buf (make-bytes (* 16 1024)))
+  (define buf (make-bytes (* 64 1024)))
   (let loop ()
     (define n-read (read-bytes-avail! buf inp))
     (unless (eof-object? n-read)
       (write-chunk (subbytes buf 0 n-read))
       (loop))))
+
+(define (pool-key u)
+  (~a (url-scheme* u) "://" (url-host u) ":" (url-port* u)))
+
+(define (url-scheme* u)
+  (or (url-scheme u)
+      (case (url-port u)
+        [(443) "https"]
+        [else  "http"])))
+
+(define (url-port* u)
+  (or (url-port u)
+      (case (url-scheme u)
+        [("https") 443]
+        [else      80])))
+
+
+;; cookies ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (maybe-add-cookie-header s u headers)
+  (cond
+    [(session-cookies s)
+     => (lambda (cookie-jar)
+          (parameterize ([current-cookie-jar cookie-jar])
+            (define hdr (cookie-header u))
+            (if hdr (hash-set headers 'cookie hdr) headers)))]
+
+    [else headers]))
+
+(define (maybe-save-cookies! s u headers/raw)
+  (define cookie-jar (session-cookies s))
+  (when cookie-jar
+    (parameterize ([current-cookie-jar cookie-jar])
+      (extract-and-save-cookies! headers/raw u))))

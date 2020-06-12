@@ -12,5 +12,5 @@
 (struct exn:fail:http-easy:timeout exn:fail:http-easy (kind))
 
 (define/contract (make-timeout-error kind)
-  (-> (or/c 'lease 'connect 'send) exn:fail:http-easy:timeout?)
+  (-> (or/c 'lease 'connect 'request) exn:fail:http-easy:timeout?)
   (exn:fail:http-easy:timeout "timed out" (current-continuation-marks) kind))

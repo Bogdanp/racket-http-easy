@@ -23,7 +23,7 @@ interface.  It automatically handles:
 
 @itemlist[
   @item{connection pooling}
-  @item{connection timeouts -- WIP}
+  @item{connection timeouts}
   @item{SSL verification}
   @item{automatic decompression}
   @item{streaming responses}
@@ -36,6 +36,7 @@ The following features are currently planned:
 
 @itemlist[
   @item{HTTP proxy support}
+  @item{automatic compression}
   @item{multipart file uploads}
 ]
 
@@ -354,6 +355,15 @@ your @racket[session?]:
   arguments may be supplied at a time and providing more than one
   raises a contract error.
 
+  The @racket[timeouts] argument controls how long various aspects of
+  the request cycle will be waited on.  When a timeout is exceeded, an
+  @racket[exn:fail:http-easy:timeout?] error is raised.  When
+  redirects are followed, the timeouts are per request.
+
+  The @racket[max-attempts] argument controls how many times
+  connection errors are retried.  This meant to handle connection
+  resets and the like and isn't a general retry mechanism.
+
   The @racket[max-redirects] argument controls how many redirects are
   followed by the request.  Redirect cycles are not detected.  To
   disable redirect following, set this argument to @racket[0].  The
@@ -521,7 +531,7 @@ your @racket[session?]:
 
 @defproc[(make-timeout-config [#:lease lease timeout/c 5]
                               [#:connect connect timeout/c 5]
-                              [#:send send timeout/c 30]) timeout-config?]{
+                              [#:request request timeout/c 30]) timeout-config?]{
 
   Produces a timeout config value that can be passed to
   @racket[session-request].
@@ -532,9 +542,18 @@ your @racket[session?]:
   The @racket[connect] argument controls how long each connection can
   take to connect to the remote end.
 
-  The @racket[send] argument controls how long sending the request
-  headers to the remote end can take.
+  The @racket[request] argument controls how long to wait on a request
+  before its response headers are returned.
 }
+
+
+@subsection{Errors}
+
+@deftogether[(
+  @defproc[(exn:fail:http-easy? [v any/c]) boolean?]
+  @defproc[(exn:fail:http-easy:timeout? [v any/c]) boolean?]
+  @defproc[(exn:fail:http-easy:timeout-kind [e exn:fail:http-easy:timeout?]) (or/c 'lease 'connect 'request)]
+)]
 
 
 @subsection{User Agents}

@@ -287,7 +287,24 @@
           (parameterize ([current-session (make-session #:cookie-jar (new list-cookie-jar%))])
             (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t)))
             (check-equal? (read-response (get "http://127.0.0.1:9911" #:stream? #t))
-                          #"a-cookie=hello")))))))))
+                          #"a-cookie=hello"))))))
+
+    (test-suite
+     "timeouts"
+
+     (test-case "raises response timeouts when the remote end is too slow"
+       (call-with-web-server
+        (lambda (_req)
+          (sleep 3)
+          (response/output
+           (lambda (out)
+             (display "hello" out))))
+        (lambda ()
+          (check-exn
+           exn:fail:http-easy:timeout?
+           (lambda ()
+             (get "http://127.0.0.1:9911"
+                  #:timeouts (make-timeout-config #:request 1)))))))))))
 
 (module+ test
   (require rackunit/text-ui)
