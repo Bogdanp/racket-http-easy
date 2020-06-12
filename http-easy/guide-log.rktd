@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Fri, 12 Jun 2020 08:04:14 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Fri, 12 Jun 2020 08:25:09 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -19,7 +19,7 @@
  #""
  #"")
 ((response-close! res) ((3) 0 () 0 () () (c values c (void))) #"" #"")
-((define res (get "https://example.com" #:drain? #f))
+((define res (get "https://example.com" #:stream? #t))
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")

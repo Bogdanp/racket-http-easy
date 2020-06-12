@@ -55,7 +55,7 @@
                    out))))
        (lambda ()
          (check-equal? (read-response (get "http://127.0.0.1:9911"
-                                           #:drain? #f
+                                           #:stream? #t
                                            #:params '((a . "1")
                                                       (a . "2")
                                                       (b . "3"))))
@@ -64,7 +64,7 @@
                          ("b" . "3")))
 
          (check-equal? (read-response (get (string->url "http://127.0.0.1:9911?a=0")
-                                           #:drain? #f
+                                           #:stream? #t
                                            #:params '((a . "1")
                                                       (a . "2")
                                                       (b . "3"))))
@@ -112,9 +112,9 @@
                [_
                 (write 'fail out)]))))
         (lambda ()
-          (check-equal? (read-response (get "http://127.0.0.1:9911" #:drain? #f)) 'fail)
+          (check-equal? (read-response (get "http://127.0.0.1:9911" #:stream? #t)) 'fail)
           (check-equal? (read-response (get "http://127.0.0.1:9911"
-                                            #:drain? #f
+                                            #:stream? #t
                                             #:auth (auth/basic "Aladdin" "OpenSesame")))
                         'ok)))))
 
@@ -131,7 +131,7 @@
                     out))))
         (lambda ()
           (check-equal? (read-response (post "http://127.0.0.1:9911"
-                                             #:drain? #f
+                                             #:stream? #t
                                              #:form '((hello . "world"))))
                         '((#"hello" . #"world"))))))
 
@@ -143,7 +143,7 @@
              (write (bytes->jsexpr (request-post-data/raw req)) out))))
         (lambda ()
           (check-equal? (read-response (post "http://127.0.0.1:9911"
-                                             #:drain? #f
+                                             #:stream? #t
                                              #:json (hasheq 'hello "world")))
                         (hasheq 'hello "world"))))))
 
@@ -251,7 +251,7 @@
                    (write 'fail/auth out)))]))
            (lambda ()
              (check-equal? (read-response (get "http://127.0.0.1:9911"
-                                               #:drain? #f
+                                               #:stream? #t
                                                #:auth (auth/basic "Aladdin" "OpenSesame")))
                            'ok)))))))
 
@@ -267,8 +267,8 @@
            (lambda (out)
              (write (headers-assq* #"cookie" (request-headers/raw req)) out))))
         (lambda ()
-          (check-false (read-response (get "http://127.0.0.1:9911" #:drain? #f)))
-          (check-false (read-response (get "http://127.0.0.1:9911" #:drain? #f))))))
+          (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t)))
+          (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t))))))
 
      (test-case "cookie jars preserve cookies"
        (call-with-web-server
@@ -285,8 +285,8 @@
                [else (write #f out)]))))
         (lambda ()
           (parameterize ([current-session (make-session #:cookie-jar (new list-cookie-jar%))])
-            (check-false (read-response (get "http://127.0.0.1:9911" #:drain? #f)))
-            (check-equal? (read-response (get "http://127.0.0.1:9911" #:drain? #f))
+            (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t)))
+            (check-equal? (read-response (get "http://127.0.0.1:9911" #:stream? #t))
                           #"a-cookie=hello")))))))))
 
 (module+ test

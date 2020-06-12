@@ -110,12 +110,10 @@
 (define supplied?
   (compose1 not unsupplied-arg?))
 
-;; TODO: Write timeouts.
-;; TODO: Read timeouts.
 (define/contract (session-request s
                                   urlish
-                                  #:drain? [drain? #t]
                                   #:close? [close? #f]
+                                  #:stream? [stream? #f]
                                   #:method [method 'get]
                                   #:headers [headers (hasheq)]
                                   #:params [params null]
@@ -129,8 +127,8 @@
                                   #:user-agent [user-agent (current-user-agent)])
   (->i ([s session?]
         [urlish (or/c bytes? string? url?)])
-       (#:drain? [drain? boolean?]
-        #:close? [close? boolean?]
+       (#:close? [close? boolean?]
+        #:stream? [stream? boolean?]
         #:method [method method/c]
         #:headers [headers headers/c]
         #:params [params query-params/c]
@@ -228,7 +226,7 @@
                   #:history (cons resp history)
                   #:redirects (sub1 redirects-remaining))]
 
-        [(or close? drain?)
+        [(or close? (not stream?))
          (begin0 resp
            (response-drain! resp)
            (response-close! resp))]

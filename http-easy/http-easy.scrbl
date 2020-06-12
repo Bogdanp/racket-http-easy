@@ -105,13 +105,13 @@ worry about this much.
 
 @subsection[#:tag "guide:streaming"]{Streaming Responses}
 
-Response bodies can be streamed by passing @racket[#f] as the
-@racket[#:drain?] argument to any of the requesters:
+Response bodies can be streamed by passing @racket[#t] as the
+@racket[#:stream?] argument to any of the requesters:
 
 @interaction[
 #:eval he-eval
 (define res
-  (get "https://example.com" #:drain? #f))
+  (get "https://example.com" #:stream? #t))
 ]
 
 The input port representing the response body can be accessed using
@@ -231,8 +231,8 @@ your @racket[session?]:
 
 @(define-syntax-rule (defrequester id t ...)
   (defproc (id [uri (or/c bytes? string? url?)]
-               [#:drain? drain? boolean? #t]
                [#:close? close? boolean? #f]
+               [#:stream? stream? boolean? #f]
                [#:headers headers headers/c (hasheq)]
                [#:params params query-params/c null]
                [#:auth auth (or/c false/c auth-procedure/c) #f]
@@ -301,8 +301,8 @@ your @racket[session?]:
 
 @defproc[(session-request [s session?]
                           [uri (or/c bytes? string? url?)]
-                          [#:drain? drain? boolean? #t]
                           [#:close? close? boolean? #f]
+                          [#:stream? stream? boolean? #f]
                           [#:method method method/c 'get]
                           [#:headers headers headers/c (hasheq)]
                           [#:params params query-params/c null]
@@ -315,20 +315,24 @@ your @racket[session?]:
                           [#:max-redirects max-redirects exact-nonnegative-integer? 16]
                           [#:user-agent user-agent (or/c bytes? string?) (current-user-agent)]) response?]{
 
-  Requests @racket[uri] using @racket[s]'s connection pool.
+  Requests @racket[uri] using @racket[s]'s connection pool and
+  associated settings (SSL context, proxy, cookie jar, etc.).
 
   Response values returned by this function must be closed before
   their underlying connection is returned to the pool.  If the
   @racket[close?] argument is @racket[#t], this is done
   automatically.  Ditto if the responses are garbage-collected.
 
-  If the @racket[drain?] argument is @racket[#t] (the default), then
-  the response's output port is drained and the resulting byte string
-  is stored on the response value.  The drained data is accessible
-  using the @racket[response-body] function.
-
   If the @racket[close?] argument is @racket[#t], then the response's
   output port is drained and the connection is closed.
+
+  If the @racket[stream?] argument is @racket[#f] (the default), then
+  the response's output port is drained and the resulting byte string
+  is stored on the response value.  The drained data is accessible
+  using the @racket[response-body] function.  If the argument is
+  @racket[#t], then the response body is streamed and the data is
+  accessible via the @racket[response-output] function.  This argument
+  has no effect if the @racket[close?] is @racket[#t].
 
   The @racket[method] argument specifies the HTTP request method to use.
 
@@ -340,7 +344,9 @@ your @racket[session?]:
   The @racket[auth] argument allows authentication headers and query
   params to be added to the request.  When following redirects, the
   auth procedure is applied to subsequent requests only if the target
-  URL has the @tech{same origin} as the original request.
+  URL has the @tech{same origin} as the original request.  Two URLs
+  are considered to have the @deftech{same origin} if their scheme,
+  hostname and port are the same.
 
   The @racket[data], @racket[form] and @racket[json] arguments can be
   used to send arbitrary data, form-encoded data and JSON data,
@@ -355,11 +361,6 @@ your @racket[session?]:
   target URL does not have the @tech{same origin} as the original
   request.
 }
-
-@subsection{Origins}
-
-Two request URLs are considered to have the @deftech{same origin} if
-their scheme, hostname and port are the same.
 
 
 @subsection{Responses}
