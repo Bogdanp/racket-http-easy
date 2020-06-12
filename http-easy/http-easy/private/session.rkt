@@ -76,6 +76,19 @@
   (when p
     (pool-release p c)))
 
+(define (pool-key u)
+  (~a (or (url-scheme u)
+          (case (url-port u)
+            [(443) "https"]
+            [else "http"]))
+      "://"
+      (url-host u)
+      ":"
+      (or (url-port u)
+          (case (url-scheme u)
+            [("https") 443]
+            [else 80]))))
+
 (define (maybe-add-cookie-header s u headers)
   (cond
     [(session-cookies s)
@@ -92,30 +105,9 @@
     (parameterize ([current-cookie-jar cookie-jar])
       (extract-and-save-cookies! headers/raw u))))
 
-(define (pool-key u)
-  (~a (or (url-scheme u)
-          (case (url-port u)
-            [(443) "https"]
-            [else "http"]))
-      "://"
-      (url-host u)
-      ":"
-      (or (url-port u)
-          (case (url-scheme u)
-            [("https") 443]
-            [else 80]))))
-
 (define default-timeout-config (make-timeout-config))
 
-(define unsupplied
-  (let ()
-    (struct unsupplied ())
-    (values (unsupplied))))
-
-(define (supplied? v)
-  (not (eq? v unsupplied)))
-
-(define supplied-arg?
+(define supplied?
   (compose1 not unsupplied-arg?))
 
 ;; TODO: Write timeouts.
@@ -129,8 +121,8 @@
                                   #:params [params null]
                                   #:auth [auth #f]
                                   #:data [data #f]
-                                  #:form [form unsupplied]
-                                  #:json [json unsupplied]
+                                  #:form [form the-unsupplied-arg]
+                                  #:json [json the-unsupplied-arg]
                                   #:timeouts [timeouts default-timeout-config]
                                   #:max-attempts [max-attempts 3]
                                   #:max-redirects [max-redirects 16]
@@ -154,9 +146,9 @@
        #:pre/name (data form json)
        "at most one of the #:data, #:form or #:json keyword arguments"
        (cond
-         [(supplied-arg? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
-         [(supplied-arg? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
-         [(supplied-arg? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
+         [(supplied? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
+         [(supplied? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
+         [(supplied? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
          [else #t])
 
        [res response?])
@@ -262,11 +254,7 @@
 
 (define (ensure-absolute-url u* u)
   (cond
-    [(and (url-scheme u*)
-          (url-host u*)
-          (url-port u*))
-     u*]
-
+    [(and (url-host u*)) u*]
     [else
      (struct-copy url u*
                   [scheme (url-scheme u)]
