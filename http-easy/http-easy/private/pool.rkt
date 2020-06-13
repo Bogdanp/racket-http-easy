@@ -182,12 +182,14 @@
           (cond
             [(exn:fail? res)
              (log-http-easy-warning "connection failed: ~a" (exn-message res))
+             (http-conn-close! leased-c)
              (pool-release p leased-c)
              (raise res)]
 
             [(not res)
              (log-http-easy-warning "connection timed out")
              (kill-thread thd)
+             (http-conn-close! leased-c)
              (pool-release p leased-c)
              (raise (make-timeout-error 'connect))]
 

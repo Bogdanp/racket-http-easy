@@ -161,7 +161,8 @@
 
                     [exn:fail?
                      (lambda (e)
-                       (log-http-easy-warning "connection failed: ~a" (exn-message e))
+                       (log-http-easy-warning "request failed: ~a" (exn-message e))
+                       (http-conn-close! c)
                        (session-release s u c)
                        (cond
                          [(< attempts max-attempts)
@@ -295,12 +296,10 @@
 (define ((make-url-connector u ssl-ctx) conn)
   (match-define (struct* url ([scheme s] [host h] [port p])) u)
   (begin0 conn
-    (if (http-conn-live? conn)
-        (http-conn-enliven! conn)
-        (http-conn-open! conn h
-                         #:port (or p (if (equal? s "https") 443 80))
-                         #:ssl? (and (equal? s "https") ssl-ctx)
-                         #:auto-reconnect? #t))))
+    (unless (http-conn-live? conn)
+      (http-conn-open! conn h
+                       #:port (or p (if (equal? s "https") 443 80))
+                       #:ssl? (and (equal? s "https") ssl-ctx)))))
 
 (define (headers->list headers)
   (for/list ([(name value) (in-hash headers)])
