@@ -67,7 +67,7 @@
   (or/c bytes? string?))
 
 (define/contract (field-part id value [content-type #"text/plain"])
-  (->* (stringy/c stringy/c) (stringy/c) part:field?)
+  (->* (stringy/c (or/c stringy/c input-port?)) (stringy/c) part:field?)
   (part:field id content-type value))
 
 (define/contract (file-part id inp [filename #"untitled"] [content-type #"application/octet-stream"])

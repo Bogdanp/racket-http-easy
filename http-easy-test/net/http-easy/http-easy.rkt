@@ -15,6 +15,7 @@
                   binding:file-filename
                   binding:file-content
                   bindings-assq
+                  bindings-assq-all
                   header
                   header-value
                   headers-assq*
@@ -308,7 +309,35 @@
            exn:fail:http-easy:timeout?
            (lambda ()
              (get "http://127.0.0.1:9911"
-                  #:timeouts (make-timeout-config #:request 1)))))))))))
+                  #:timeouts (make-timeout-config #:request 1))))))))
+
+    (test-suite
+     "multipart payloads"
+
+     (test-case "uploads files"
+       (call-with-web-server
+        (lambda (req)
+          (response/output
+           (lambda (out)
+             (write
+              (for/list ([f (in-list (bindings-assq-all #"f" (request-bindings/raw req)))])
+                (cons (binding:file-filename f)
+                      (binding:file-content f)))
+              out))))
+        (lambda ()
+          (parameterize ([current-session (make-session)])
+            (check-equal?
+             (read-response
+              (post
+               #:stream? #t
+               #:data (multipart-payload
+                       (field-part "a" (open-input-string "hello"))
+                       (file-part "f" (open-input-string "{}") "a.json")
+                       (file-part "f" (open-input-string "{}") "b.json"))
+               "http://127.0.0.1:9911"))
+             (list
+              (cons #"a.json" #"{}")
+              (cons #"b.json" #"{}")))))))))))
 
 (module+ test
   (require rackunit/text-ui)
