@@ -676,3 +676,10 @@ sent to a remote server.
   Holds the value of the @tt{User-Agent} header that is sent with
   every request.
 }
+
+
+@section{Changelog}
+
+@subsection{@exec{v0.1.0} -- 2020/06/13}
+
+Initial release.
