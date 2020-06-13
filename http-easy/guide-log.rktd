@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 10:38:18 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 12:41:38 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -108,6 +108,54 @@
  #""
  #"")
 ((hash-ref res 'data) ((3) 0 () 0 () () (c values c (u . "hello"))) #"" #"")
+((define res
+   (response-json
+    (post
+     "https://httpbin.org/anything"
+     #:data
+     (gzip-payload (pure-payload #"hello")))))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref res 'data)
+ ((3)
+  0
+  ()
+  0
+  ()
+  ()
+  (c
+   values
+   c
+   (u
+    .
+    "data:application/octet-stream;base64,H4sIAIXJ5F4AA8tIzcnJBwCGphA2BQAAAA==")))
+ #""
+ #"")
+((define res
+   (response-json
+    (post
+     "https://httpbin.org/anything"
+     #:data
+     (gzip-payload (json-payload (hasheq 'hello "world"))))))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref res 'data)
+ ((3)
+  0
+  ()
+  0
+  ()
+  ()
+  (c
+   values
+   c
+   (u
+    .
+    "data:application/octet-stream;base64,H4sIAIXJ5F4AA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
+ #""
+ #"")
 ((require net/cookies net/url racket/class)
  ((3) 0 () 0 () () (c values c (void)))
  #""

@@ -12,7 +12,8 @@
                      racket/base
                      racket/class
                      racket/contract
-                     racket/match))
+                     racket/match
+                     xml))
 
 @title{@tt{http-easy}: a high-level HTTP client}
 @author[(author+email "Bogdan Popa" "bogdan@defn.io")]
@@ -25,7 +26,7 @@ for day-to-day use.  It automatically handles:
   @item{connection pooling}
   @item{connection timeouts}
   @item{SSL verification}
-  @item{automatic decompression}
+  @item{automatic compression and decompression}
   @item{streaming responses}
   @item{authentication}
   @item{redirect following}
@@ -36,7 +37,6 @@ The following features are currently planned:
 
 @itemlist[
   @item{HTTP proxy support}
-  @item{automatic compression}
   @item{multipart file uploads}
 ]
 
@@ -201,6 +201,27 @@ keyword argument:
 (hash-ref res 'data)
 ]
 
+To gzip the payload, use the @racket[gzip-payload] combinator:
+
+@interaction[
+#:eval he-eval
+(define res
+ (response-json
+  (post "https://httpbin.org/anything"
+        #:data (gzip-payload (pure-payload #"hello")))))
+(hash-ref res 'data)
+]
+
+@interaction[
+#:eval he-eval
+(define res
+ (response-json
+  (post "https://httpbin.org/anything"
+        #:data (gzip-payload (json-payload (hasheq 'hello "world"))))))
+(hash-ref res 'data)
+]
+
+
 @subsection{Cookie Storage}
 
 To store cookies between requests pass a @racket[cookie-jar<%>] into
@@ -357,9 +378,8 @@ your @racket[session?]:
   @interaction[
   #:eval he-eval
   (define res
-    (post
-     #:data (json-payload (hasheq 'hello "world"))
-     "https://httpbin.org/post"))
+    (post #:data (json-payload (hasheq 'hello "world"))
+          "https://httpbin.org/post"))
   (hash-ref (response-json res) 'data)
   ]
 
@@ -472,12 +492,31 @@ your @racket[session?]:
   it.  An exception is raised if the data is not valid JSON.
 }
 
+@defproc[(response-xexpr [r response?]) xexpr?]{
+  Drains @racket[r]'s output port, parses the data as an @racket[xexpr?]
+  and returns it. An exception is raised if the data is not valid XML.
+}
+
+@defproc[(response-xml [r response?]) document?]{
+  Drains @racket[r]'s output port, parses the data as an XML
+  @racket[document?]  and returns it. An exception is raised if the
+  data is not valid XML.
+}
+
 @defproc[(read-response [r response?]) any/c]{
   Equivalent to @racket[(read (response-output r))].
 }
 
 @defproc[(read-response-json [r response?]) (or/c eof-object? jsexpr?)]{
   Equivalent to @racket[(read-json (response-output r))].
+}
+
+@defproc[(read-response-xexpr [r response?]) xexpr?]{
+  Equivalent to @racket[(xml->xexpr (document-element (read-response-xml r)))].
+}
+
+@defproc[(read-response-xml [r response?]) document?]{
+  Equivalent to @racket[(read-xml/document (response-output r))].
 }
 
 @defproc[(response-drain! [r response?]) void?]{
@@ -555,6 +594,14 @@ server along with associated headers.
 
 @defproc[(json-payload [v jsexpr?]) payload-procedure/c]{
   Produces a payload procedure that encodes @racket[v] as JSON data.
+}
+
+@defproc[(gzip-payload [p payload-procedure/c]) payload-procedure/c]{
+  Produces a payload procedure that gzips the output of @racket[p].
+}
+
+@defproc[(pure-payload [v (or/c bytes? string? input-port?)]) payload-procedure/c]{
+  Produces a payload procedure that uses @racket[v] as the request body.
 }
 
 

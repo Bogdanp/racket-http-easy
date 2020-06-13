@@ -7,6 +7,7 @@
          racket/contract
          racket/match
          racket/port
+         xml
          "common.rkt")
 
 (provide
@@ -24,10 +25,14 @@
  response-output
  response-body
  response-json
+ response-xexpr
+ response-xml
  response-drain!
  response-close!
  read-response
- read-response-json)
+ read-response-json
+ read-response-xexpr
+ read-response-xml)
 
 (struct response
   (sema
@@ -93,6 +98,16 @@
   (-> response? (or/c eof-object? jsexpr?))
   (bytes->jsexpr (response-body r)))
 
+(define/contract (response-xexpr r)
+  (-> response? xexpr?)
+  (xml->xexpr
+   (document-element
+    (response-xml r))))
+
+(define/contract (response-xml r)
+  (-> response? document?)
+  (read-xml/document (open-input-bytes (response-body r))))
+
 (define/contract (read-response r)
   (-> response? any/c)
   (read (response-output r)))
@@ -100,6 +115,16 @@
 (define/contract (read-response-json r)
   (-> response? (or/c eof-object? jsexpr?))
   (read-json (response-output r)))
+
+(define/contract (read-response-xexpr r)
+  (-> response? xexpr?)
+  (xml->xexpr
+   (document-element
+    (read-response-xml r))))
+
+(define/contract (read-response-xml r)
+  (-> response? document?)
+  (read-xml/document (response-output r)))
 
 (define/contract (response-drain! r)
   (-> response? void?)
