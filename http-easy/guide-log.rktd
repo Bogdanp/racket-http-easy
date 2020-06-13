@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 16:07:57 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 16:29:47 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -34,7 +34,7 @@
  #"")
 ((response-status-line
   (get "https://httpbin.org/basic-auth/Aladdin/OpenSesame"))
- ((3) 0 () 0 () () (c values c (u . #"HTTP/1.1 401 UNAUTHORIZED")))
+ ((3) 0 () 0 () () (c values c (u . #"HTTP/1.1 401 Unauthorized")))
  #""
  #"")
 ((response-json
@@ -129,7 +129,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIAOD55F4AA8tIzcnJBwCGphA2BQAAAA==")))
+    "data:application/octet-stream;base64,H4sIAP/+5F4AA8tIzcnJBwCGphA2BQAAAA==")))
  #""
  #"")
 ((define res
@@ -153,7 +153,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIAOD55F4AA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
+    "data:application/octet-stream;base64,H4sIAP/+5F4AA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
  #""
  #"")
 ((require net/cookies net/url racket/class)
@@ -210,8 +210,8 @@
    (post
     #:data
     (multipart-payload
-     (multipart:field "a" "hello")
-     (multipart:file "f" (open-input-string "hello world!")))
+     (field-part "a" "hello")
+     (file-part "f" (open-input-string "hello world!")))
     "https://httpbin.org/anything"))
  ((3) 0 () 0 () () (c values c (void)))
  #""

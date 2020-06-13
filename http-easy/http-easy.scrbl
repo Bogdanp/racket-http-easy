@@ -604,18 +604,29 @@ sent to a remote server.
   Produces a payload procedure that uses @racket[v] as the request body.
 }
 
-@deftogether[(
-  @defproc[(multipart:part? [v any/c]) boolean?]
-  @defproc[(multipart:field [name (or/c bytes? string?)]
-                            [value (or/c bytes? string?)]
-                            [content-type (or/c bytes? string?) #"text/plain"]) multipart:part?]
-  @defproc[(multipart:file [name (or/c bytes? string?)]
-                           [inp input-port?]
-                           [filename (or/c bytes? string?) #"untitled"]
-                           [content-type (or/c bytes? string?) #"application/octet-stream"]) multipart:part?]
-  @defproc[(multipart-payload [f (or/c multipart:field? multipart:file?)] ...
-                              [#:boundary boundary (or/c bytes? string?) _unsupplied]) payload-procedure/c]
-)]{
+@defproc[(part? [v any/c]) boolean?]{
+  Returns @racket[#t] when @racket[v] is a @racket[multipart-payload] part.
+}
+
+@defproc[(field-part [name (or/c bytes? string?)]
+                     [value (or/c bytes? string?)]
+                     [content-type (or/c bytes? string?) #"text/plain"]) part?]{
+
+  Produces a @racket[part?] for use with @racket[multipart-payload]
+  that encapsulates a form field.
+}
+
+@defproc[(file-part [name (or/c bytes? string?)]
+                    [inp input-port?]
+                    [filename (or/c bytes? string?) #"untitled"]
+                    [content-type (or/c bytes? string?) #"application/octet-stream"]) part?]{
+
+  Produces a @racket[part?] for use with @racket[multipart-payload]
+  that encapsulates a file.
+}
+
+@defproc[(multipart-payload [f part?] ...
+                            [#:boundary boundary (or/c bytes? string?) _unsupplied]) payload-procedure/c]{
 
   Produces a @tt{multipart/form-data} payload.
 
@@ -624,8 +635,8 @@ sent to a remote server.
   (define resp
     (post
      #:data (multipart-payload
-             (multipart:field "a" "hello")
-             (multipart:file "f" (open-input-string "hello world!")))
+             (field-part "a" "hello")
+             (file-part "f" (open-input-string "hello world!")))
      "https://httpbin.org/anything"))
   (hash-ref (response-json resp) 'form)
   (hash-ref (response-json resp) 'files)

@@ -35,10 +35,10 @@
       (define-values (hs inp)
         ((multipart-payload
           #:boundary "the-boundary"
-          (multipart:field "a" "hello")
-          (multipart:file "f" (open-input-string "untitled"))
-          (multipart:file "f" (open-input-string "hello") "hello.txt")
-          (multipart:file "f" (open-input-string "{}") "hello.json" "application/json"))
+          (field-part "a" "hello")
+          (file-part "f" (open-input-string "untitled"))
+          (file-part "f" (open-input-string "hello") "hello.txt")
+          (file-part "f" (open-input-string "{}") "hello.json" "application/json"))
          (hasheq)))
 
       (check-equal?
