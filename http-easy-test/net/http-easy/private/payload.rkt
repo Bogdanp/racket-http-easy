@@ -3,6 +3,7 @@
 (require file/gunzip
          json
          net/http-easy/private/payload
+         racket/port
          rackunit)
 
 (provide
@@ -25,7 +26,50 @@
 
       (define-values (in out) (make-pipe))
       (gunzip-through-ports inp out)
-      (check-equal? (read-json in) (hasheq 'hello "world"))))))
+      (check-equal? (read-json in) (hasheq 'hello "world"))))
+
+   (test-suite
+    "multipart-payload"
+
+    (test-case "payload"
+      (define-values (hs inp)
+        ((multipart-payload
+          #:boundary "the-boundary"
+          (multipart:field "a" "hello")
+          (multipart:file "f" (open-input-string "untitled"))
+          (multipart:file "f" (open-input-string "hello") "hello.txt")
+          (multipart:file "f" (open-input-string "{}") "hello.json" "application/json"))
+         (hasheq)))
+
+      (check-equal?
+       hs
+       (hasheq 'content-type "multipart/form-data; boundary=the-boundary"))
+
+      (define lines
+        (port->lines inp #:line-mode 'return-linefeed))
+      (check-equal?
+       lines
+       '("--the-boundary"
+         "content-disposition: form-data; name=\"a\""
+         "content-type: text/plain"
+         ""
+         "hello"
+         "--the-boundary"
+         "content-disposition: form-data; name=\"f\"; filename=\"untitled\""
+         "content-type: application/octet-stream"
+         ""
+         "untitled"
+         "--the-boundary"
+         "content-disposition: form-data; name=\"f\"; filename=\"hello.txt\""
+         "content-type: application/octet-stream"
+         ""
+         "hello"
+         "--the-boundary"
+         "content-disposition: form-data; name=\"f\"; filename=\"hello.json\""
+         "content-type: application/json"
+         ""
+         "{}"
+         "--the-boundary--"))))))
 
 (module+ test
   (require rackunit/text-ui)

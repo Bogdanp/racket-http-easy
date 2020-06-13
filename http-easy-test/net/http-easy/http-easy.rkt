@@ -6,11 +6,15 @@
          net/url
          racket/class
          racket/match
+         racket/port
          rackunit
          web-server/dispatch
          (only-in web-server/http
                   binding-id
                   binding:form-value
+                  binding:file-filename
+                  binding:file-content
+                  bindings-assq
                   header
                   header-value
                   headers-assq*

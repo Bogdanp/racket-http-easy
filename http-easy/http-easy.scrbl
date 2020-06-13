@@ -31,13 +31,13 @@ for day-to-day use.  It automatically handles:
   @item{authentication}
   @item{redirect following}
   @item{cookie storage}
+  @item{multipart file uploads}
 ]
 
 The following features are currently planned:
 
 @itemlist[
   @item{HTTP proxy support}
-  @item{multipart file uploads}
 ]
 
 The following features may be supported in the future:
@@ -578,8 +578,8 @@ your @racket[session?]:
 
 @subsection{Payload Procedures}
 
-@deftech{Payload procedures} produce data to be sent to a remote
-server along with associated headers.
+@deftech{Payload procedures} produce data and associated headers to be
+sent to a remote server.
 
 @defthing[payload-procedure/c (-> headers/c (values headers/c (or/c bytes? string? input-port?)))]{
   The contract for payload procedures.  A payload procedure takes the
@@ -602,6 +602,34 @@ server along with associated headers.
 
 @defproc[(pure-payload [v (or/c bytes? string? input-port?)]) payload-procedure/c]{
   Produces a payload procedure that uses @racket[v] as the request body.
+}
+
+@deftogether[(
+  @defproc[(multipart:part? [v any/c]) boolean?]
+  @defproc[(multipart:field [name (or/c bytes? string?)]
+                            [value (or/c bytes? string?)]
+                            [content-type (or/c bytes? string?) #"text/plain"]) multipart:part?]
+  @defproc[(multipart:file [name (or/c bytes? string?)]
+                           [inp input-port?]
+                           [filename (or/c bytes? string?) #"untitled"]
+                           [content-type (or/c bytes? string?) #"application/octet-stream"]) multipart:part?]
+  @defproc[(multipart-payload [f (or/c multipart:field? multipart:file?)] ...
+                              [#:boundary boundary (or/c bytes? string?) _unsupplied]) payload-procedure/c]
+)]{
+
+  Produces a @tt{multipart/form-data} payload.
+
+  @interaction[
+  #:eval he-eval
+  (define resp
+    (post
+     #:data (multipart-payload
+             (multipart:field "a" "hello")
+             (multipart:file "f" (open-input-string "hello world!")))
+     "https://httpbin.org/anything"))
+  (hash-ref (response-json resp) 'form)
+  (hash-ref (response-json resp) 'files)
+  ]
 }
 
 

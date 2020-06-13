@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 12:41:38 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 16:07:57 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -129,7 +129,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIAIXJ5F4AA8tIzcnJBwCGphA2BQAAAA==")))
+    "data:application/octet-stream;base64,H4sIAOD55F4AA8tIzcnJBwCGphA2BQAAAA==")))
  #""
  #"")
 ((define res
@@ -153,7 +153,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIAIXJ5F4AA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
+    "data:application/octet-stream;base64,H4sIAOD55F4AA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
  #""
  #"")
 ((require net/cookies net/url racket/class)
@@ -204,5 +204,23 @@
     ((content-type (and (regexp #"text/html") the-content-type))))
    the-content-type))
  ((3) 0 () 0 () () (c values c (u . #"text/html; charset=UTF-8")))
+ #""
+ #"")
+((define resp
+   (post
+    #:data
+    (multipart-payload
+     (multipart:field "a" "hello")
+     (multipart:file "f" (open-input-string "hello world!")))
+    "https://httpbin.org/anything"))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref (response-json resp) 'form)
+ ((3) 0 () 0 () () (c values c (h - () (a u . "hello"))))
+ #""
+ #"")
+((hash-ref (response-json resp) 'files)
+ ((3) 0 () 0 () () (c values c (h - () (f u . "hello world!"))))
  #""
  #"")
