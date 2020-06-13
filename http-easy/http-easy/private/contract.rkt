@@ -8,7 +8,8 @@
  headers/c
  form-data/c
  query-params/c
- auth-procedure/c)
+ auth-procedure/c
+ payload-procedure/c)
 
 (define method/c
   (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?))
@@ -24,3 +25,6 @@
 
 (define auth-procedure/c
   (-> url? headers/c query-params/c (values headers/c query-params/c)))
+
+(define payload-procedure/c
+  (-> headers/c (values headers/c (or/c bytes? string? input-port?))))

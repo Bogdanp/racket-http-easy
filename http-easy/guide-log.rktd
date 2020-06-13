@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Fri, 12 Jun 2020 08:44:17 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 10:38:18 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -41,7 +41,7 @@
   (get
    "https://httpbin.org/basic-auth/Aladdin/OpenSesame"
    #:auth
-   (auth/basic "Aladdin" "OpenSesame")))
+   (basic-auth "Aladdin" "OpenSesame")))
  ((3)
   0
   ()
@@ -52,7 +52,7 @@
  #""
  #"")
 ((response-json
-  (get "https://httpbin.org/bearer" #:auth (auth/bearer "secret-api-key")))
+  (get "https://httpbin.org/bearer" #:auth (bearer-auth "secret-api-key")))
  ((3)
   0
   ()
@@ -133,6 +133,18 @@
   (printf "~a: ~a" (ua-cookie-name c) (ua-cookie-value c)))
  ((3) 0 () 0 () () (c values c (void)))
  #"hello: world"
+ #"")
+((define res
+   (post
+    #:data
+    (json-payload (hasheq 'hello "world"))
+    "https://httpbin.org/post"))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((hash-ref (response-json res) 'data)
+ ((3) 0 () 0 () () (c values c (u . "{\"hello\":\"world\"}")))
+ #""
  #"")
 ((require racket/match) ((3) 0 () 0 () () (c values c (void))) #"" #"")
 ((match

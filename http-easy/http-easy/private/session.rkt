@@ -14,6 +14,7 @@
          "contract.rkt"
          "error.rkt"
          "logger.rkt"
+         "payload.rkt"
          "pool.rkt"
          "response.rkt"
          "timeout.rkt"
@@ -109,7 +110,7 @@
         #:headers [headers headers/c]
         #:params [params query-params/c]
         #:auth [auth (or/c false/c auth-procedure/c)]
-        #:data [data (or/c false/c bytes? string? input-port? data-procedure/c)]
+        #:data [data (or/c false/c bytes? string? input-port? payload-procedure/c)]
         #:form [form form-data/c]
         #:json [json jsexpr?]
         #:timeouts [timeouts timeout-config?]
@@ -127,28 +128,31 @@
 
        [res response?])
 
+  (define data*
+    (cond
+      [(supplied? form) (form-payload form)]
+      [(supplied? json) (json-payload json)]
+      [else data]))
+
   (define (request u
                    #:attempts [attempts 1]
                    #:method [method method]
                    #:headers [headers headers]
                    #:params [params params]
                    #:auth [auth auth]
-                   #:data [data data]
-                   #:form [form form]
-                   #:json [json json]
+                   #:data [data data*]
                    #:history [history null]
                    #:redirects [redirects-remaining max-redirects])
-    (define-values (headers* params*)
+    (define-values (headers* params* data*)
       (let*-values ([(headers) (hash-set headers 'user-agent user-agent)]
                     [(headers) (maybe-add-cookie-header s u headers)]
-                    [(headers) (cond
-                                 [(supplied? json) (hash-set headers 'content-type #"application/json; charset=utf-8")]
-                                 [(supplied? form) (hash-set headers 'content-type #"application/x-www-form-urlencoded; charset=utf-8")]
-                                 [else headers])]
                     [(headers params) (if auth
                                           (auth u headers params)
-                                          (values headers params))])
-        (values headers params)))
+                                          (values headers params))]
+                    [(headers data) (if (procedure? data)
+                                        (data headers)
+                                        (values headers data))])
+        (values headers params data)))
     (define path&query (make-path&query u params*))
     (define c (session-lease s u timeouts))
     (with-handlers ([exn:fail:http-easy?
@@ -180,11 +184,9 @@
                 #:close? close?
                 #:method (method->bytes method)
                 #:headers (headers->list headers*)
-                #:data (cond
-                         [(supplied? json) (jsexpr->bytes json)]
-                         [(supplied? form) (alist->form-urlencoded form)]
-                         [(input-port? data) (port->data-procedure data)]
-                         [else data])))
+                #:data (if (input-port? data*)
+                           (port->data-procedure data*)
+                           data*)))
 
              (channel-put resp-ch (make-response resp-status
                                                  resp-headers

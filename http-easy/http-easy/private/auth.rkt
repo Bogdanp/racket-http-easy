@@ -6,10 +6,10 @@
          "contract.rkt")
 
 (provide
- auth/basic
- auth/bearer)
+ basic-auth
+ bearer-auth)
 
-(define/contract (auth/basic username password)
+(define/contract (basic-auth username password)
   (-> (or/c bytes? string?)
       (or/c bytes? string?)
       auth-procedure/c)
@@ -25,7 +25,7 @@
   (lambda (_url headers params)
     (values (hash-set headers 'authorization header-value) params)))
 
-(define/contract (auth/bearer token)
+(define/contract (bearer-auth token)
   (-> (or/c bytes? string?) auth-procedure/c)
   (define header-value
     (call-with-output-bytes

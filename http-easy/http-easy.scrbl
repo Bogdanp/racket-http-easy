@@ -139,7 +139,7 @@ The library provides an auth procedure for HTTP basic auth:
 #:eval he-eval
 (response-json
  (get "https://httpbin.org/basic-auth/Aladdin/OpenSesame"
-      #:auth (auth/basic "Aladdin" "OpenSesame")))
+      #:auth (basic-auth "Aladdin" "OpenSesame")))
 ]
 
 And for bearer auth:
@@ -148,10 +148,10 @@ And for bearer auth:
 #:eval he-eval
 (response-json
  (get "https://httpbin.org/bearer"
-      #:auth (auth/bearer "secret-api-key")))
+      #:auth (bearer-auth "secret-api-key")))
 ]
 
-The above is equivalent to:
+The above example is equivalent to:
 
 @interaction[
 #:eval he-eval
@@ -237,7 +237,7 @@ your @racket[session?]:
                [#:headers headers headers/c (hasheq)]
                [#:params params query-params/c null]
                [#:auth auth (or/c false/c auth-procedure/c) #f]
-               [#:data data (or/c false/c bytes? string? input-port? data-procedure/c) #f]
+               [#:data data (or/c false/c bytes? string? input-port? payload-procedure/c) #f]
                [#:form form query-params/c _unsupplied]
                [#:json json jsexpr? _unsupplied]
                [#:timeouts timeouts timeout-config? (make-timeout-config)]
@@ -309,7 +309,7 @@ your @racket[session?]:
                           [#:headers headers headers/c (hasheq)]
                           [#:params params query-params/c null]
                           [#:auth auth (or/c false/c auth-procedure/c) #f]
-                          [#:data data (or/c false/c bytes? string? input-port? data-procedure/c) #f]
+                          [#:data data (or/c false/c bytes? string? input-port? payload-procedure/c) #f]
                           [#:form form form-data/c _unsupplied]
                           [#:json json jsexpr? _unsupplied]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
@@ -350,11 +350,28 @@ your @racket[session?]:
   are considered to have the @deftech{same origin} if their scheme,
   hostname and port are the same.
 
-  The @racket[data], @racket[form] and @racket[json] arguments can be
-  used to send arbitrary data, form-encoded data and JSON data,
-  respectively, as part of the request payload.  Only one of the
-  arguments may be supplied at a time and providing more than one
-  raises a contract error.
+  The @racket[data] argument can be used to send arbitrary request
+  data to the remote end.  A number of @tech{payload procedures}
+  are available for producing data in standard formats:
+
+  @interaction[
+  #:eval he-eval
+  (define res
+    (post
+     #:data (json-payload (hasheq 'hello "world"))
+     "https://httpbin.org/post"))
+  (hash-ref (response-json res) 'data)
+  ]
+
+  The @racket[form] argument is a shorthand for passing a
+  @racket[form-payload] as the @racket[data] argument.
+
+  The @racket[json] argument is a shorthand for passing a
+  @racket[json-payload] as the @racket[data] argument.
+
+  The @racket[data], @racket[form] and @racket[json] arguments are
+  mutually-exclusive.  Supplying more than one at a time causes a
+  contract error to be raised.
 
   The @racket[timeouts] argument controls how long various aspects of
   the request cycle will be waited on.  When a timeout is exceeded, an
@@ -507,16 +524,37 @@ your @racket[session?]:
   information.
 }
 
-@defproc[(auth/basic [username (or/c bytes? string?)]
+@defproc[(basic-auth [username (or/c bytes? string?)]
                      [password (or/c bytes? string?)]) auth-procedure/c]{
 
   Generates an auth procedure that authenticates requests using HTTP
   basic auth.
 }
 
-@defproc[(auth/bearer [token (or/c bytes? string?)]) auth-procedure/c]{
+@defproc[(bearer-auth [token (or/c bytes? string?)]) auth-procedure/c]{
   Generates an auth procedure that authenticates requests using the
   given bearer @racket[token].
+}
+
+
+@subsection{Payload Procedures}
+
+@deftech{Payload procedures} produce data to be sent to a remote
+server along with associated headers.
+
+@defthing[payload-procedure/c (-> headers/c (values headers/c (or/c bytes? string? input-port?)))]{
+  The contract for payload procedures.  A payload procedure takes the
+  current set of request headers and returns new request headers and a
+  value to be used as the request body.
+}
+
+@defproc[(form-payload [v form-data/c]) payload-procedure/c]{
+  Produces a payload procedure that encodes @racket[v] as form data
+  using the @tt{application/x-www-form-urlencoded} content type.
+}
+
+@defproc[(json-payload [v jsexpr?]) payload-procedure/c]{
+  Produces a payload procedure that encodes @racket[v] as JSON data.
 }
 
 

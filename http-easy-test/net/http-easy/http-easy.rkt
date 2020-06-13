@@ -115,7 +115,7 @@
           (check-equal? (read-response (get "http://127.0.0.1:9911" #:stream? #t)) 'fail)
           (check-equal? (read-response (get "http://127.0.0.1:9911"
                                             #:stream? #t
-                                            #:auth (auth/basic "Aladdin" "OpenSesame")))
+                                            #:auth (basic-auth "Aladdin" "OpenSesame")))
                         'ok)))))
 
     (test-suite
@@ -252,7 +252,7 @@
            (lambda ()
              (check-equal? (read-response (get "http://127.0.0.1:9911"
                                                #:stream? #t
-                                               #:auth (auth/basic "Aladdin" "OpenSesame")))
+                                               #:auth (basic-auth "Aladdin" "OpenSesame")))
                            'ok)))))))
 
     (test-suite
