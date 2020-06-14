@@ -12,6 +12,7 @@
                      racket/base
                      racket/class
                      racket/contract
+                     racket/format
                      racket/match
                      xml))
 
@@ -618,7 +619,7 @@ sent to a remote server.
 
 @defproc[(file-part [name (or/c bytes? string?)]
                     [inp input-port?]
-                    [filename (or/c bytes? string?) #"untitled"]
+                    [filename (or/c bytes? string?) (~a (object-name inp))]
                     [content-type (or/c bytes? string?) #"application/octet-stream"]) part?]{
 
   Produces a @racket[part?] for use with @racket[multipart-payload]
@@ -690,6 +691,14 @@ sent to a remote server.
 
 
 @section{Changelog}
+
+@subsection{@tt{HEAD}}
+
+@subsubsection{Changed}
+
+@itemlist[
+  @item{The @tt{filename} argument to @racket[file-part] now defaults to the name of the input port.}
+]
 
 @subsection{@exec{v0.1.0} -- 2020/06/13}
 

@@ -5,6 +5,7 @@
          json
          net/uri-codec
          racket/contract
+         racket/format
          racket/match
          racket/port
          "contract.rkt")
@@ -70,7 +71,7 @@
   (->* (stringy/c (or/c stringy/c input-port?)) (stringy/c) part:field?)
   (part:field id content-type value))
 
-(define/contract (file-part id inp [filename #"untitled"] [content-type #"application/octet-stream"])
+(define/contract (file-part id inp [filename (~a (object-name inp))] [content-type #"application/octet-stream"])
   (->* (stringy/c input-port?) (stringy/c stringy/c) part:file?)
   (part:file id content-type filename inp))
 
@@ -89,7 +90,7 @@
        (fprintf out "--~a\r\n" boundary*)
        (match f
          [(part:field id content-type value)
-          (fprintf out "content-disposition: form-data; name=\"~a\"\r\n" id)
+          (fprintf out "content-disposition: form-data; name=\"~a\"\r\n" (quote-multipart id))
           (when content-type
             (fprintf out "content-type: ~a\r\n" content-type))
           (fprintf out "\r\n")
@@ -100,7 +101,7 @@
           (fprintf out "\r\n")]
 
          [(part:file id content-type filename in)
-          (fprintf out "content-disposition: form-data; name=\"~a\"; filename=\"~a\"\r\n" id filename)
+          (fprintf out "content-disposition: form-data; name=\"~a\"; filename=\"~a\"\r\n" (quote-multipart id) (quote-multipart filename))
           (fprintf out "content-type: ~a\r\n\r\n" content-type)
           (copy-port in out)
           (fprintf out "\r\n")]))
@@ -108,10 +109,13 @@
      (close-output-port out)))
   (values (hash-set hs 'content-type (format "multipart/form-data; boundary=~a" boundary*)) in))
 
+(define (quote-multipart name)
+  (regexp-replace* #rx"[\"\\]" name "\\\\\\0"))
+
 (define (generate-boundary)
   (with-output-to-bytes
-   (lambda ()
-     (display "--------http-easy-")
-     (display (md5 (call-with-output-bytes
-                (lambda (out)
-                  (display (current-inexact-milliseconds) out))))))))
+    (lambda ()
+      (display "--------http-easy-")
+      (display (md5 (call-with-output-bytes
+                     (lambda (out)
+                       (display (current-inexact-milliseconds) out))))))))
