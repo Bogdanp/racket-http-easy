@@ -80,11 +80,7 @@
        #:rest (non-empty-listof part?)
        payload-procedure/c)
   (define boundary*
-    (or boundary
-        (format "----~a"
-                (md5 (call-with-output-bytes
-                      (lambda (out)
-                        (display (current-inexact-milliseconds) out)))))))
+    (or boundary (generate-boundary)))
   (define-values (in out)
     (make-pipe))
   (thread
@@ -111,3 +107,11 @@
      (fprintf out "--~a--" boundary*)
      (close-output-port out)))
   (values (hash-set hs 'content-type (format "multipart/form-data; boundary=~a" boundary*)) in))
+
+(define (generate-boundary)
+  (with-output-to-bytes
+   (lambda ()
+     (display "--------http-easy-")
+     (display (md5 (call-with-output-bytes
+                (lambda (out)
+                  (display (current-inexact-milliseconds) out))))))))
