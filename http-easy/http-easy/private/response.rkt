@@ -80,7 +80,7 @@
   (define/contract (id r h)
     (-> response? symbol? any/c)
     (define h:bs (symbol->bytes h))
-    (define re (byte-regexp (bytes-append #"^(?i:" h:bs #"): ")))
+    (define re (byte-regexp (bytes-append #"^(?i:" (regexp-quote h:bs) #"): ")))
     (for-form ([header (in-list (response-headers r))]
                #:when (regexp-match re header))
       (subbytes header (+ 2 (bytes-length h:bs))))))
@@ -154,7 +154,7 @@
     ([_ (name:id value:expr) ... (~optional rst)]
      #:with (head-re ...)
      (for/list ([name (syntax->datum #'(name ...))])
-       (datum->syntax #'name (bytes-append #"^(?i:" (symbol->bytes name) #"): (.*)")))
+       (datum->syntax #'name (bytes-append #"^(?i:" (regexp-quote (symbol->bytes name)) #"): (.*)")))
      #'(list-no-order (regexp head-re (list _ value)) ... (~? rst _) (... ...)))))
 
 (define-match-expander response:me
