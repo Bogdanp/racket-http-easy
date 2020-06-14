@@ -69,7 +69,23 @@
          "content-type: application/json"
          ""
          "{}"
-         "--the-boundary--"))))))
+         "--the-boundary--")))
+
+    (test-case "quoting"
+      (define-values (hs inp)
+        ((multipart-payload
+          #:boundary "boundary"
+          (file-part "f" (open-input-string "hello") "a-name-with\\-and\""))
+         (hasheq)))
+
+      (check-equal?
+       (port->lines inp #:line-mode 'return-linefeed)
+       '("--boundary"
+         "content-disposition: form-data; name=\"f\"; filename=\"a-name-with\\\\-and\\\"\""
+         "content-type: application/octet-stream"
+         ""
+         "hello"
+         "--boundary--"))))))
 
 (module+ test
   (require rackunit/text-ui)
