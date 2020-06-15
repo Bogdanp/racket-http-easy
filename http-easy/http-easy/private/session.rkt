@@ -215,9 +215,9 @@
 
       (cond
         [(and (positive? redirects-remaining) (redirect? resp))
-         (define location:bs (response-headers-ref resp 'location))
-         (define u* (ensure-absolute-url (->url location:bs) u))
-         (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location:bs)
+         (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
+         (define u* (ensure-absolute-url u location))
+         (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location)
          (response-drain! resp)
          (response-close! resp)
          (request u*
@@ -254,14 +254,11 @@
     [(null? all-params) path]
     [else (string-append path "?" (alist->form-urlencoded all-params))]))
 
-(define (ensure-absolute-url u* u)
+(define (ensure-absolute-url orig location)
+  (define location-url (->url location))
   (cond
-    [(and (url-host u*)) u*]
-    [else
-     (struct-copy url u*
-                  [scheme (url-scheme u)]
-                  [host (url-host u)]
-                  [port (url-port u)])]))
+    [(url-host location-url) location-url]
+    [else (combine-url/relative orig location)]))
 
 (define (same-origin? a b)
   (and (equal? (url-scheme a) (url-scheme b))
