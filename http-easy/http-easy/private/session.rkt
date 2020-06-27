@@ -10,6 +10,7 @@
          racket/contract
          racket/format
          racket/match
+         racket/string
          "common.rkt"
          "contract.rkt"
          "error.rkt"
@@ -244,8 +245,22 @@
 (define (->url urlish)
   (cond
     [(url? urlish) urlish]
-    [(bytes? urlish) (string->url (bytes->string/utf-8 urlish))]
-    [else (string->url urlish)]))
+    [(bytes? urlish) (string->url/dwim (bytes->string/utf-8 urlish))]
+    [else (string->url/dwim urlish)]))
+
+(define (string->url/dwim s)
+  (cond
+    [(regexp-match? #px"^[^:]+://" s)
+     (define u (string->url s))
+     (struct-copy url u
+                  [scheme (string-trim #:repeat? #t (url-scheme u))]
+                  [host   (string-trim #:repeat? #t (url-host   u))])]
+
+    [(string-prefix? s "://")
+     (string->url/dwim (~a "http" s))]
+
+    [else
+     (string->url/dwim (~a "http://" s))]))
 
 (define (make-path&query u params)
   (define path (url-path-string u))
@@ -269,6 +284,9 @@
   (case (response-status-code resp)
     [(301 302 303 307) (response-headers-ref resp 'location)]
     [else #f]))
+
+(module+ internal
+  (provide string->url/dwim))
 
 
 ;; GC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

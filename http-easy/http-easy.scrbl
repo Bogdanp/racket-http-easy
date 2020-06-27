@@ -697,6 +697,8 @@ sent to a remote server.
 @subsubsection{Changed}
 
 @itemlist[
+  @item{Requesters strip whitespace from schemes and hostnames when called with string URLs.}
+  @item{Requesters automatically add the @tt{http} scheme to string URLs that don't have one.}
   @item{The @tt{filename} argument to @racket[file-part] now defaults to the name of the input port.}
 ]
 
