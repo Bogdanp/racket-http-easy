@@ -270,7 +270,10 @@
     [else (string-append path "?" (alist->form-urlencoded all-params))]))
 
 (define (ensure-absolute-url orig location)
-  (define location-url (->url location))
+  (define location-url
+    (if (bytes? location)
+        (string->url (bytes->string/utf-8 location))
+        (string->url location)))
   (cond
     [(url-host location-url) location-url]
     [else (combine-url/relative orig location)]))
