@@ -694,12 +694,20 @@ sent to a remote server.
 
 @subsection{@tt{HEAD}}
 
+@subsection{@exec{v0.1.1} -- 2020/08/18}
+
 @subsubsection{Changed}
 
 @itemlist[
   @item{Requesters strip whitespace from schemes and hostnames when called with string URLs.}
   @item{Requesters automatically add the @tt{http} scheme to string URLs that don't have one.}
   @item{The @tt{filename} argument to @racket[file-part] now defaults to the name of the input port.}
+]
+
+@subsubsection{Fixed}
+
+@itemlist[
+  @item{Idle connections are now properly expired.}
 ]
 
 @subsection{@exec{v0.1.0} -- 2020/06/13}
