@@ -178,8 +178,9 @@
       (define thd
         (thread
          (lambda ()
-           (with-handlers ([exn:fail? (lambda (e)
-                                        (channel-put resp-ch e))])
+           (with-handlers ([exn:fail?
+                            (lambda (e)
+                              (channel-put resp-ch e))])
              (define-values (resp-status resp-headers resp-out)
                (http-conn-sendrecv!
                 c path&query
@@ -210,6 +211,7 @@
           (lambda (_)
             (kill-thread thd)
             (session-release s u c)
+            (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
             (raise (make-timeout-error 'request))))))
       (log-http-easy-debug "response: ~.s" (response-status-line resp))
       (maybe-save-cookies! s u (response-headers resp))
