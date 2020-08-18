@@ -2,6 +2,7 @@
 
 (require net/http-client
          racket/contract
+         racket/list
          racket/match
          "error.rkt"
          "logger.rkt"
@@ -152,8 +153,9 @@
 
              [else
               (log-http-easy-debug "expiring ~a idle connections" (hash-count dead))
-              (define new-conns (filter (lambda (c) (not (hash-has-key? dead c))) conns))
-              (define new-idle (filter (lambda (c) (not (hash-has-key? dead c))) conns))
+              (define (dead? c) (hash-has-key? dead c))
+              (define new-conns (filter-not dead? conns))
+              (define new-idle (filter-not dead? idle))
               (loop new-conns active new-idle live waits)]))))))))
 
 (define-syntax-rule (send p msg arg ...)
