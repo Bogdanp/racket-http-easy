@@ -116,7 +116,7 @@ Response bodies can be streamed by passing @racket[#t] as the
   (get "https://example.com" #:stream? #t))
 ]
 
-The input port representing the response body can be accessed using
+The input port containing the response body can be accessed using
 @racket[response-output]:
 
 @interaction[
@@ -124,6 +124,16 @@ The input port representing the response body can be accessed using
 (input-port? (response-output res))
 (read-string 5 (response-output res))
 (read-string 5 (response-output res))
+]
+
+Using @racket[response-body] immediately drains the remaining data and
+closes the input port:
+
+@interaction[
+#:eval he-eval
+(subbytes (response-body res) 0 10)
+(subbytes (response-body res) 0 20)
+(port-closed? (response-output res))
 ]
 
 @subsection{Authenticating Requests}
@@ -356,7 +366,7 @@ your @racket[session?]:
   using the @racket[response-body] function.  If the argument is
   @racket[#t], then the response body is streamed and the data is
   accessible via the @racket[response-output] function.  This argument
-  has no effect if the @racket[close?] is @racket[#t].
+  has no effect when @racket[close?] is @racket[#t].
 
   The @racket[method] argument specifies the HTTP request method to use.
 
@@ -457,7 +467,6 @@ your @racket[session?]:
   @defproc[(response-status-code [r response?]) status-code/c]
   @defproc[(response-status-message [r response?]) bytes?]
   @defproc[(response-headers [r response?]) (listof bytes?)]
-  @defproc[(response-output [r response?]) input-port?]
 )]{
   Accessors for the raw data available on a response.
 }
@@ -486,6 +495,15 @@ your @racket[session?]:
 @defproc[(response-body [r response?]) bytes?]{
   Drains @racket[r]'s output port and returns the result as a byte
   string.
+}
+
+@defproc[(response-output [r response?]) input-port?]{
+  Returns a port which contains the contents of the response.  If
+  @racket[response-body] has already been called on the response, then
+  the port is closed.  Likewise, if either @racket[#:close? #t] or
+  @racket[#:stream? #f] were passed to @racket[session-request], then
+  the response data is only accessible via @racket[response-body].
+  See the @sr section of the guide for an example.
 }
 
 @defproc[(response-json [r response?]) (or/c eof-object? jsexpr?)]{

@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Sat, 13 Jun 2020 16:29:47 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Sat, 30 Jan 2021 09:19:47 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -32,9 +32,18 @@
  ((3) 0 () 0 () () (c values c (u . "type ")))
  #""
  #"")
+((subbytes (response-body res) 0 10)
+ ((3) 0 () 0 () () (c values c (u . #"html>\n<htm")))
+ #""
+ #"")
+((subbytes (response-body res) 0 20)
+ ((3) 0 () 0 () () (c values c (u . #"html>\n<html>\n<head>\n")))
+ #""
+ #"")
+((port-closed? (response-output res)) ((3) 0 () 0 () () (q values #t)) #"" #"")
 ((response-status-line
   (get "https://httpbin.org/basic-auth/Aladdin/OpenSesame"))
- ((3) 0 () 0 () () (c values c (u . #"HTTP/1.1 401 Unauthorized")))
+ ((3) 0 () 0 () () (c values c (u . #"HTTP/1.1 401 UNAUTHORIZED")))
  #""
  #"")
 ((response-json
@@ -129,7 +138,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIAP/+5F4AA8tIzcnJBwCGphA2BQAAAA==")))
+    "data:application/octet-stream;base64,H4sIALYkFWAAA8tIzcnJBwCGphA2BQAAAA==")))
  #""
  #"")
 ((define res
@@ -153,7 +162,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIAP/+5F4AA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
+    "data:application/octet-stream;base64,H4sIALYkFWAAA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
  #""
  #"")
 ((require net/cookies net/url racket/class)
