@@ -47,9 +47,6 @@ The following features may be supported in the future:
   @item{HTTP/2 and HTTP/3 support}
 ]
 
-The API is currently in flux so be aware that it may change before the
-final release.
-
 
 @section{Guide}
 
