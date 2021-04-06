@@ -1,9 +1,8 @@
 #lang racket/base
 
-(require net/http-client
+(require (prefix-in d: data/pool)
+         net/http-client
          racket/contract
-         racket/list
-         racket/match
          "error.rkt"
          "logger.rkt"
          "timeout.rkt")
@@ -45,15 +44,20 @@
 (define connector/c
   (-> http-conn? http-conn?))
 
-(struct pool (custodian connector mgr)
+(struct pool (connector impl)
   #:transparent)
 
-(define/contract (make-pool config connector)
+(define/contract (make-pool conf connector)
   (-> pool-config? connector/c pool?)
-  (define custodian (make-custodian))
-  (parameterize ([current-custodian custodian])
-    (pool custodian connector (make-pool-manager config))))
+  (pool
+   connector
+   (d:make-pool
+    #:max-size (pool-config-max-size conf)
+    #:idle-ttl (seconds->ms (pool-config-idle-timeout conf))
+    http-conn
+    http-conn-close!)))
 
+#;
 (define (make-pool-manager conf)
   (thread
    (lambda ()
@@ -158,16 +162,17 @@
               (define new-idle (filter-not dead? idle))
               (loop new-conns active new-idle live waits)]))))))))
 
+#;
 (define-syntax-rule (send p msg arg ...)
   (thread-send (pool-mgr p) (list 'msg arg ...)))
 
-;; TODO: Handle breaks.
 (define/contract (pool-lease p [t #f])
-  (->* (pool?) ((or/c false/c timeout-config?)) http-conn?)
-  (define ch (make-channel))
-  (send p lease ch)
+  (->* (pool?) ((or/c #f timeout-config?)) http-conn?)
+  (define impl (pool-impl p))
+  (define maybe-lease-timeout-ms
+    (and t (seconds->ms (timeout-config-lease t))))
   (cond
-    [(sync/timeout (and t (timeout-config-lease t)) ch)
+    [(d:pool-take! impl maybe-lease-timeout-ms)
      => (lambda (leased-c)
           (define out (make-channel))
           (define thd
@@ -177,7 +182,6 @@
                                 (lambda (e)
                                   (channel-put out e))])
                  (channel-put out ((pool-connector p) leased-c))))))
-
           (define res
             (sync/timeout (and t (timeout-config-connect t)) out))
 
@@ -185,40 +189,30 @@
             [(exn:fail? res)
              (log-http-easy-warning "connection failed: ~a" (exn-message res))
              (http-conn-close! leased-c)
-             (pool-release p leased-c)
+             (d:pool-release! impl leased-c)
              (raise res)]
 
             [(not res)
              (log-http-easy-warning "connection timed out")
              (kill-thread thd)
              (http-conn-close! leased-c)
-             (pool-release p leased-c)
+             (d:pool-release! impl leased-c)
              (raise (make-timeout-error 'connect))]
 
             [else
              res]))]
 
     [else
-     (async-release p ch)
      (raise (make-timeout-error 'lease))]))
-
-(define (async-release p ch)
-  (thread
-   (lambda ()
-     (sync
-      (handle-evt
-       ch
-       (lambda (c)
-         (log-http-easy-warning "releasing orphan connection")
-         (pool-release p c)))))))
 
 (define/contract (pool-release p c)
   (-> pool? http-conn? void?)
-  (send p release c))
+  (d:pool-release! (pool-impl p) c))
 
 (define/contract (pool-close! p)
   (-> pool? void?)
-  (send p close)
-  (thread-wait (pool-mgr p))
-  (custodian-shutdown-all (pool-custodian p))
+  (d:pool-close! (pool-impl p))
   (log-http-easy-debug "connection pool closed"))
+
+(define (seconds->ms n)
+  (inexact->exact (round (* n 1000))))

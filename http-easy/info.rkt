@@ -4,7 +4,8 @@
 (define collection "net")
 (define deps '("base"
                "memoize"
-               "net-cookies-lib"))
+               "net-cookies-lib"
+               "resource-pool-lib"))
 (define build-deps '("net-cookies-doc"
                      "net-doc"
                      "racket-doc"

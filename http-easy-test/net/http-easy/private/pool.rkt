@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require net/http-client
+(require (prefix-in d: data/pool)
+         net/http-client
          net/http-easy
          net/http-easy/private/pool
          rackunit)
@@ -63,17 +64,18 @@
       (check-true (http-conn? c2)))
 
     (test-case "times out idle connections"
-      (define t 0.1)
-      (define p (make-pool (make-pool-config #:max-size 1 #:idle-timeout t) values))
-      (define c1 (pool-lease p))
-      (pool-release p c1)
-      (define c2 (pool-lease p))
-      (pool-release p c2)
-      (check-eq? c1 c2)
-      (sleep t)
-      (sync (system-idle-evt))
-      (define c3 (pool-lease p))
-      (check-not-eq? c2 c3)))))
+      (parameterize ([d:current-idle-timeout-slack 0])
+        (define t 0.1)
+        (define p (make-pool (make-pool-config #:max-size 1 #:idle-timeout t) values))
+        (define c1 (pool-lease p))
+        (pool-release p c1)
+        (define c2 (pool-lease p))
+        (pool-release p c2)
+        (check-eq? c1 c2)
+        (sleep t)
+        (sync (system-idle-evt))
+        (define c3 (pool-lease p))
+        (check-not-eq? c2 c3))))))
 
 (module+ test
   (require rackunit/text-ui)
