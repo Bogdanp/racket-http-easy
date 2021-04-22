@@ -26,26 +26,22 @@
   (-> payload-procedure/c payload-procedure/c)
   (define-values (hs* data)
     (p hs))
-  (define-values (in out)
-    (make-pipe))
-  (thread
-   (lambda ()
-     (define gzip-in
-       (cond
-         [(bytes? data)
-          (open-input-bytes data)]
-         [(string? data)
-          (open-input-string data)]
-         [else data]))
-     (gzip-through-ports gzip-in out #f (current-seconds))
-     (close-output-port out)))
-  (values (hash-set hs* 'content-encoding #"gzip") in))
+  (values
+   (hash-set hs* 'content-encoding #"gzip")
+   (~>>
+    (cond
+      [(bytes? data) (open-input-bytes data)]
+      [(string? data) (open-input-string data)]
+      [else data])
+    (lambda (in out)
+      (gzip-through-ports in out #f (current-seconds))))))
 
 (define/contract (json-payload v)
   (-> jsexpr? payload-procedure/c)
-  (define data (jsexpr->bytes v))
   (lambda (hs)
-    (values (hash-set hs 'content-type #"application/json; charset=utf-8") data)))
+    (values
+     (hash-set hs 'content-type #"application/json; charset=utf-8")
+     (~>> v write-json))))
 
 (define/contract ((pure-payload v) hs)
   (-> (or/c bytes? string? input-port?) payload-procedure/c)
@@ -80,34 +76,32 @@
        (#:boundary (or/c bytes? string?))
        #:rest (non-empty-listof part?)
        payload-procedure/c)
-  (define boundary*
-    (or boundary (generate-boundary)))
-  (define-values (in out)
-    (make-pipe))
-  (thread
-   (lambda ()
-     (for ([f (in-list fs)])
-       (fprintf out "--~a\r\n" boundary*)
-       (match f
-         [(part:field id content-type value)
-          (fprintf out "content-disposition: form-data; name=\"~a\"\r\n" (quote-multipart id))
-          (when content-type
-            (fprintf out "content-type: ~a\r\n" content-type))
-          (fprintf out "\r\n")
-          (cond
-            [(bytes? value) (display value out)]
-            [(string? value) (display value out)]
-            [else (copy-port value out)])
-          (fprintf out "\r\n")]
+  (let ([boundary (or boundary (generate-boundary))])
+    (values
+     (hash-set hs 'content-type (format "multipart/form-data; boundary=~a" boundary))
+     (~>> fs (make-parts-writer boundary)))))
 
-         [(part:file id content-type filename in)
-          (fprintf out "content-disposition: form-data; name=\"~a\"; filename=\"~a\"\r\n" (quote-multipart id) (quote-multipart filename))
-          (fprintf out "content-type: ~a\r\n\r\n" content-type)
-          (copy-port in out)
-          (fprintf out "\r\n")]))
-     (fprintf out "--~a--" boundary*)
-     (close-output-port out)))
-  (values (hash-set hs 'content-type (format "multipart/form-data; boundary=~a" boundary*)) in))
+(define ((make-parts-writer boundary) fs out)
+  (for ([f (in-list fs)])
+    (fprintf out "--~a\r\n" boundary)
+    (match f
+      [(part:field id content-type value)
+       (fprintf out "content-disposition: form-data; name=\"~a\"\r\n" (quote-multipart id))
+       (when content-type
+         (fprintf out "content-type: ~a\r\n" content-type))
+       (fprintf out "\r\n")
+       (cond
+         [(bytes? value) (display value out)]
+         [(string? value) (display value out)]
+         [else (copy-port value out)])
+       (fprintf out "\r\n")]
+
+      [(part:file id content-type filename in)
+       (fprintf out "content-disposition: form-data; name=\"~a\"; filename=\"~a\"\r\n" (quote-multipart id) (quote-multipart filename))
+       (fprintf out "content-type: ~a\r\n\r\n" content-type)
+       (copy-port in out)
+       (fprintf out "\r\n")]))
+  (fprintf out "--~a--" boundary))
 
 (define (quote-multipart name)
   (regexp-replace* #rx"[\"\\]" name "\\\\\\0"))
@@ -119,3 +113,20 @@
       (display (md5 (call-with-output-bytes
                      (lambda (out)
                        (display (current-inexact-milliseconds) out))))))))
+
+
+;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Asynchronously write `data' to a new input port using `f'.
+(define (~>> data f)
+  (define-values (in out)
+    (make-pipe))
+  (begin0 in
+    (thread
+     (lambda ()
+       (dynamic-wind
+         void
+         (lambda ()
+           (f data out))
+         (lambda ()
+           (close-output-port out)))))))
