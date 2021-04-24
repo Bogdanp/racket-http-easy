@@ -299,7 +299,7 @@ your @racket[session?]:
 @defproc[(make-session [#:pool-config pool-config pool-config? (make-pool-config)]
                        [#:ssl-context ssl-context ssl-client-context? (ssl-secure-client-context)]
                        [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]
-                       [#:proxies proxies (listof proxy?)]) session?]{
+                       [#:proxies proxies (listof proxy?) null]) session?]{
   Produces a @racket[session?] value with @racket[#:pool-config] as
   its connection pool configuration.  Each requested scheme, host and
   port pair has its own connection pool.
