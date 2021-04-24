@@ -300,15 +300,16 @@
   (make-will-executor))
 
 (void
- (thread
-  (lambda ()
-    (let loop ()
-      (with-handlers ([exn:fail?
-                       (lambda (e)
-                         (log-http-easy-warning "will execution failed: ~a" (exn-message e))
-                         (loop))])
-        (will-execute executor)
-        (loop))))))
+ (parameterize ([current-namespace (make-empty-namespace)])
+   (thread
+    (lambda ()
+      (let loop ()
+        (with-handlers ([exn:fail?
+                         (lambda (e)
+                           (log-http-easy-warning "will execution failed: ~a" (exn-message e))
+                           (loop))])
+          (will-execute executor)
+          (loop)))))))
 
 
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
