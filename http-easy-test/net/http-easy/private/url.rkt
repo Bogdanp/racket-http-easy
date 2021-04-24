@@ -1,15 +1,15 @@
 #lang racket/base
 
-(require (submod net/http-easy/private/session internal)
+(require (submod net/http-easy/private/url internal)
          net/url
          rackunit)
 
 (provide
- session-tests)
+ url-tests)
 
-(define session-tests
+(define url-tests
   (test-suite
-   "session"
+   "url"
 
    (test-suite
     "string->url/dwim"
@@ -33,4 +33,4 @@
 
 (module+ test
   (require rackunit/text-ui)
-  (run-tests session-tests))
+  (run-tests url-tests))

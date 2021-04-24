@@ -8,6 +8,7 @@
          "http-easy/private/error.rkt"
          "http-easy/private/payload.rkt"
          "http-easy/private/pool.rkt"
+         "http-easy/private/proxy.rkt"
          "http-easy/private/response.rkt"
          "http-easy/private/session.rkt"
          "http-easy/private/timeout.rkt"
@@ -29,6 +30,7 @@
  (all-from-out "http-easy/private/auth.rkt")
  (all-from-out "http-easy/private/contract.rkt")
  (all-from-out "http-easy/private/payload.rkt")
+ (all-from-out "http-easy/private/proxy.rkt")
  (all-from-out "http-easy/private/response.rkt")
  (all-from-out "http-easy/private/session.rkt")
  (all-from-out "http-easy/private/user-agent.rkt")

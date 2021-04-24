@@ -10,15 +10,16 @@
          racket/contract
          racket/format
          racket/match
-         racket/string
          "common.rkt"
          "contract.rkt"
          "error.rkt"
          "logger.rkt"
          "payload.rkt"
          "pool.rkt"
+         "proxy.rkt"
          "response.rkt"
          "timeout.rkt"
+         "url.rkt"
          "user-agent.rkt")
 
 ;; session ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -32,18 +33,21 @@
 (define default-pool-config
   (make-pool-config))
 
-(struct session (sema conf pools ssl-ctx cookies [closed? #:mutable])
+(struct session (sema conf pools ssl-ctx cookies proxies [closed? #:mutable])
   #:transparent)
 
-(define/contract (make-session #:pool-config [conf default-pool-config]
-                               #:ssl-context [ssl-ctx (ssl-secure-client-context)]
-                               #:cookie-jar [cookies #f])
+(define/contract (make-session
+                  #:pool-config [conf default-pool-config]
+                  #:ssl-context [ssl-ctx (ssl-secure-client-context)]
+                  #:cookie-jar [cookies #f]
+                  #:proxies [proxies null])
   (->* ()
        (#:pool-config pool-config?
         #:ssl-context ssl-client-context?
-        #:cookie-jar (is-a?/c cookie-jar<%>))
+        #:cookie-jar (is-a?/c cookie-jar<%>)
+        #:proxies (listof proxy?))
        session?)
-  (define s (session (make-semaphore 1) conf (make-hash) ssl-ctx cookies #f))
+  (define s (session (make-semaphore 1) conf (make-hash) ssl-ctx cookies proxies #f))
   (begin0 s
     (will-register executor s session-close!)
     (log-http-easy-debug "session opened")))
@@ -66,7 +70,8 @@
       (lambda ()
         (hash-ref! ps k (lambda ()
                           (define ssl-ctx (session-ssl-ctx s))
-                          (define connector (make-url-connector url ssl-ctx))
+                          (define proxies (session-proxies s))
+                          (define connector (make-url-connector url ssl-ctx proxies))
                           (make-pool (session-conf s) connector))))))
 
   (pool-lease p timeouts))
@@ -104,7 +109,7 @@
                                   #:max-redirects [max-redirects 16]
                                   #:user-agent [user-agent (current-user-agent)])
   (->i ([s session?]
-        [urlish (or/c bytes? string? url?)])
+        [urlish urlish/c])
        (#:close? [close? boolean?]
         #:stream? [stream? boolean?]
         #:method [method method/c]
@@ -244,26 +249,6 @@
 
   (request (->url urlish)))
 
-(define (->url urlish)
-  (cond
-    [(url? urlish) urlish]
-    [(bytes? urlish) (string->url/dwim (bytes->string/utf-8 urlish))]
-    [else (string->url/dwim urlish)]))
-
-(define (string->url/dwim s)
-  (cond
-    [(regexp-match? #px"^[^:]+://" s)
-     (define u (string->url s))
-     (struct-copy url u
-                  [scheme (string-trim #:repeat? #t (url-scheme u))]
-                  [host   (string-trim #:repeat? #t (url-host   u))])]
-
-    [(string-prefix? s "://")
-     (string->url/dwim (~a "http" s))]
-
-    [else
-     (string->url/dwim (~a "http://" s))]))
-
 (define (make-path&query u params)
   (define path (url-path-string u))
   (define all-params (append (url-query u) params))
@@ -290,9 +275,6 @@
     [(301 302 303 307) (response-headers-ref resp 'location)]
     [else #f]))
 
-(module+ internal
-  (provide string->url/dwim))
-
 
 ;; GC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -314,13 +296,16 @@
 
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define ((make-url-connector u ssl-ctx) conn)
+(define ((make-url-connector u ssl-ctx proxies) conn)
   (match-define (struct* url ([scheme s] [host h] [port p])) u)
   (begin0 conn
     (unless (http-conn-live? conn)
-      (http-conn-open! conn h
-                       #:port (or p (if (equal? s "https") 443 80))
-                       #:ssl? (and (equal? s "https") ssl-ctx)))))
+      (or
+       (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
+         ((proxy-connect! p) conn u ssl-ctx))
+       (http-conn-open! conn h
+                        #:port (or p (if (equal? s "https") 443 80))
+                        #:ssl? (and (equal? s "https") ssl-ctx))))))
 
 (define (headers->list headers)
   (for/list ([(name value) (in-hash headers)])

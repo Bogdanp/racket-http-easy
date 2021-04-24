@@ -35,18 +35,6 @@ for day-to-day use.  It automatically handles:
   @item{multipart file uploads}
 ]
 
-The following features are currently planned:
-
-@itemlist[
-  @item{HTTP proxy support}
-]
-
-The following features may be supported in the future:
-
-@itemlist[
-  @item{HTTP/2 and HTTP/3 support}
-]
-
 
 @section{Guide}
 
@@ -310,20 +298,26 @@ your @racket[session?]:
 
 @defproc[(make-session [#:pool-config pool-config pool-config? (make-pool-config)]
                        [#:ssl-context ssl-context ssl-client-context? (ssl-secure-client-context)]
-                       [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]) session?]{
-  Produces a @racket[session?] value with @racket[pool-config] as its
-  connection pool configuration.  Each requested scheme, host and port
-  pair has its own connection pool.
+                       [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]
+                       [#:proxies proxies (listof proxy?)]) session?]{
+  Produces a @racket[session?] value with @racket[#:pool-config] as
+  its connection pool configuration.  Each requested scheme, host and
+  port pair has its own connection pool.
 
-  The @racket[ssl-context] argument controls how HTTPS connections are
-  handled.  The default implementation verifies TLS certificates,
+  The @racket[#:ssl-context] argument controls how HTTPS connections
+  are handled.  The default implementation verifies TLS certificates,
   verifies hostnames and avoids using weak ciphers.  To use a custom
   certificate chain or private key, you can use
   @racket[ssl-make-client-context].
 
-  The @racket[cookie-jar] argument specifies the cookie jar to use to
-  store cookies between requests made against a session.  The default
-  is to discard all cookies.  See @racket[list-cookie-jar%].
+  The @racket[#:cookie-jar] argument specifies the cookie jar to use
+  to store cookies between requests made against a session.  The
+  default is to discard all cookies.  See @racket[list-cookie-jar%].
+
+  The @racket[#:proxies] argument specifies an optional list of
+  @tech{proxies} to use when making requests.
+
+  @history[#:changed "0.3" @elem{Added the @racket[#:proxies] argument.}]
 }
 
 @defproc[(session-close! [s session?]) void?]{
@@ -570,6 +564,41 @@ your @racket[session?]:
 }
 
 
+@subsection{Proxies}
+
+@deftech{Proxies} tunnel requests to one host through another.
+
+@defproc[(proxy? [v any/c]) boolean?]{
+  Returns @racket[#t] when @racket[v] is a @tech{proxy}.
+}
+
+@defproc[(make-proxy [matches? (-> url? boolean?)]
+                     [connect! (-> http-conn? url? (or/c #f ssl-client-context?) void?)]) proxy?]{
+  Returns a new @tech{proxy} that applies to requests whose URL
+  @racket[matches?] returns @racket[#t] for.
+
+  @history[#:added "0.3"]
+}
+
+@defproc[(make-http-proxy [proxy-url (or/c bytes? string? url?)]
+                          [matches? (-> url? boolean?) (λ (u) (equal? (url-scheme u) "http"))]) proxy?]{
+  Returns an HTTP @tt{CONNECT} @racket[proxy?] that tunnels requests
+  whose URLs @racket[matches?] is @racket[#t] for through the server
+  at @racket[proxy-url].
+
+  @history[#:added "0.3"]
+}
+
+@defproc[(make-https-proxy [proxy-url (or/c bytes? string? url?)]
+                           [matches? (-> url? boolean?) (λ (u) (equal? (url-scheme u) "https"))]) proxy?]{
+  Returns an HTTPS @tt{CONNECT} @racket[proxy?] that tunnels requests
+  whose URLs @racket[matches?] is @racket[#t] for through the server
+  at @racket[proxy-url].
+
+  @history[#:added "0.3"]
+}
+
+
 @subsection{Authentication}
 
 @defthing[auth-procedure/c (-> url? headers/c query-params/c (values headers/c query-params/c))]{
@@ -703,28 +732,3 @@ sent to a remote server.
   Holds the value of the @tt{User-Agent} header that is sent with
   every request.
 }
-
-
-@section{Changelog}
-
-@subsection{@tt{HEAD}}
-
-@subsection{@exec{v0.1.1} -- 2020/08/18}
-
-@subsubsection{Changed}
-
-@itemlist[
-  @item{Requesters strip whitespace from schemes and hostnames when called with string URLs.}
-  @item{Requesters automatically add the @tt{http} scheme to string URLs that don't have one.}
-  @item{The @tt{filename} argument to @racket[file-part] now defaults to the name of the input port.}
-]
-
-@subsubsection{Fixed}
-
-@itemlist[
-  @item{Idle connections are now properly expired.}
-]
-
-@subsection{@exec{v0.1.0} -- 2020/06/13}
-
-Initial release.
