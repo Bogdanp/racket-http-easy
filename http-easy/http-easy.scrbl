@@ -245,6 +245,17 @@ your @racket[session?]:
 ]
 
 
+@subsection{UNIX Sockets}
+
+To make a request to a UNIX domain socket, pass @tt{http+unix} as the
+scheme and url-encode the path to the socket as the host.
+
+@interaction[
+#:eval he-eval
+(response-status-code (get "http+unix://%2Fvar%2Frun%2Fdocker.sock/info"))
+]
+
+
 @section{Reference}
 
 @(define-syntax-rule (defrequester id t ...)
@@ -410,6 +421,9 @@ your @racket[session?]:
   @tt{Authorization} header is stripped from redirect requests if the
   target URL does not have the @tech{same origin} as the original
   request.
+
+  @history[#:changed "0.3" @elem{Added support for the @tt{http+unix}
+  scheme to allow requests to UNIX domain sockets.}]
 }
 
 

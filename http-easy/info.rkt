@@ -5,7 +5,8 @@
 (define deps '("base"
                "memoize"
                "net-cookies-lib"
-               "resource-pool-lib"))
+               "resource-pool-lib"
+               "unix-socket-lib"))
 (define build-deps '("net-cookies-doc"
                      "net-doc"
                      "racket-doc"

@@ -10,6 +10,7 @@
          racket/contract
          racket/format
          racket/match
+         racket/unix-socket
          "common.rkt"
          "contract.rkt"
          "error.rkt"
@@ -300,12 +301,20 @@
   (match-define (struct* url ([scheme s] [host h] [port p])) u)
   (begin0 conn
     (unless (http-conn-live? conn)
-      (or
-       (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
-         ((proxy-connect! p) conn u ssl-ctx))
-       (http-conn-open! conn h
-                        #:port (or p (if (equal? s "https") 443 80))
-                        #:ssl? (and (equal? s "https") ssl-ctx))))))
+      (case s
+        [("http+unix")
+         (define path (form-urlencoded-decode h))
+         (define-values (in out)
+           (unix-socket-connect path))
+         (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
+
+        [else
+         (or
+          (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
+            ((proxy-connect! p) conn u ssl-ctx))
+          (http-conn-open! conn h
+                           #:port (or p (if (equal? s "https") 443 80))
+                           #:ssl? (and (equal? s "https") ssl-ctx)))]))))
 
 (define (headers->list headers)
   (for/list ([(name value) (in-hash headers)])

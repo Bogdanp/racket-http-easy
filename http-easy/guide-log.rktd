@@ -11,7 +11,7 @@
  #""
  #"")
 ((response-headers-ref res 'date)
- ((3) 0 () 0 () () (c values c (u . #"Sat, 30 Jan 2021 09:19:47 GMT")))
+ ((3) 0 () 0 () () (c values c (u . #"Sat, 24 Apr 2021 06:58:51 GMT")))
  #""
  #"")
 ((subbytes (response-body res) 0 30)
@@ -138,7 +138,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIALYkFWAAA8tIzcnJBwCGphA2BQAAAA==")))
+    "data:application/octet-stream;base64,H4sIALDBg2AAA8tIzcnJBwCGphA2BQAAAA==")))
  #""
  #"")
 ((define res
@@ -162,7 +162,7 @@
    c
    (u
     .
-    "data:application/octet-stream;base64,H4sIALYkFWAAA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
+    "data:application/octet-stream;base64,H4sIALHBg2AAA6tWykjNyclXslIqzy/KSVGqBQDRQQnYEQAAAA==")))
  #""
  #"")
 ((require net/cookies net/url racket/class)
@@ -190,6 +190,10 @@
   (printf "~a: ~a" (ua-cookie-name c) (ua-cookie-value c)))
  ((3) 0 () 0 () () (c values c (void)))
  #"hello: world"
+ #"")
+((response-status-code (get "http+unix://%2Fvar%2Frun%2Fdocker.sock/info"))
+ ((3) 0 () 0 () () (q values 200))
+ #""
  #"")
 ((define res
    (post
