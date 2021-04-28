@@ -5,5 +5,6 @@
 (define build-deps '("http-easy"
                      "net-cookies-lib"
                      "rackunit-lib"
+                     "resource-pool-lib"
                      "web-server-lib"))
 (define update-implies '("http-easy"))
