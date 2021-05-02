@@ -101,7 +101,7 @@
        (fprintf out "content-type: ~a\r\n\r\n" content-type)
        (copy-port in out)
        (fprintf out "\r\n")]))
-  (fprintf out "--~a--" boundary))
+  (fprintf out "--~a--\r\n" boundary))
 
 (define (quote-multipart name)
   (regexp-replace* #rx"[\"\\]" name "\\\\\\0"))
