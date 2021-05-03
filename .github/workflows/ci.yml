@@ -5,14 +5,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        racket-version: [ '7.7', '7.8', '7.9', 'current' ]
+        racket-version: [ '7.7', '7.8', '7.9', '8.0', 'current' ]
+        racket-variant: [ 'BC', 'CS' ]
     name: Build & Test on Racket ${{ matrix.racket-version }}
     steps:
       - uses: actions/checkout@master
-      - uses: Bogdanp/setup-racket@v0.13
+      - uses: Bogdanp/setup-racket@v1.2.1
         with:
           architecture: x64
-          variant: 'CS'
+          variant: ${{ matrix.racket-variant }}
           version: ${{ matrix.racket-version }}
       - run: raco pkg install --batch --auto http-easy/ http-easy-test/
       - run: raco test http-easy-test/
