@@ -12,7 +12,7 @@
    "url"
 
    (test-suite
-    "string->url/dwim"
+    "string->url*"
 
     (test-case "normalizes various types of URIs before parsing"
       (define tests
@@ -29,7 +29,7 @@
       (for* ([pair (in-list tests)]
              [s (in-value (car pair))]
              [e (in-value (cdr pair))])
-        (check-equal? (url->string (string->url/dwim s)) e s))))))
+        (check-equal? (url->string (string->url* s)) e s))))))
 
 (module+ test
   (require rackunit/text-ui)

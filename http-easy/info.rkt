@@ -1,6 +1,6 @@
 #lang info
 
-(define version "0.3.1")
+(define version "0.3.2")
 (define collection "net")
 (define deps '("base"
                "memoize"

@@ -34,7 +34,7 @@
 (define default-pool-config
   (make-pool-config))
 
-(struct session (sema conf pools ssl-ctx cookies proxies [closed? #:mutable])
+(struct session (cust sema conf pools ssl-ctx cookies proxies [closed? #:mutable])
   #:transparent)
 
 (define/contract (make-session
@@ -48,7 +48,8 @@
         #:cookie-jar (is-a?/c cookie-jar<%>)
         #:proxies (listof proxy?))
        session?)
-  (define s (session (make-semaphore 1) conf (make-hash) ssl-ctx cookies proxies #f))
+  (define cust (make-custodian))
+  (define s (session cust (make-semaphore 1) conf (make-hash) ssl-ctx cookies proxies #f))
   (begin0 s
     (will-register executor s session-close!)
     (log-http-easy-debug "session opened")))
@@ -61,21 +62,22 @@
         (for ([p (in-hash-values (session-pools s))])
           (pool-close! p))
         (set-session-closed?! s #t)
+        (custodian-shutdown-all (session-cust s))
         (log-http-easy-debug "session closed")))))
 
 (define (session-lease s url timeouts)
-  (define k (pool-key url))
-  (define ps (session-pools s))
-  (define p
-    (call-with-semaphore (session-sema s)
-      (lambda ()
-        (hash-ref! ps k (lambda ()
-                          (define ssl-ctx (session-ssl-ctx s))
-                          (define proxies (session-proxies s))
-                          (define connector (make-url-connector url ssl-ctx proxies))
-                          (make-pool (session-conf s) connector))))))
-
-  (pool-lease p timeouts))
+  (parameterize ([current-custodian (session-cust s)])
+    (define k (pool-key url))
+    (define ps (session-pools s))
+    (define p
+      (call-with-semaphore (session-sema s)
+        (lambda ()
+          (hash-ref! ps k (lambda ()
+                            (define ssl-ctx (session-ssl-ctx s))
+                            (define proxies (session-proxies s))
+                            (define connector (make-url-connector url ssl-ctx proxies))
+                            (make-pool (session-conf s) connector))))))
+    (pool-lease p timeouts)))
 
 (define (session-release s url c)
   (define k (pool-key url))
@@ -284,7 +286,7 @@
 
 (void
  (parameterize ([current-namespace (make-empty-namespace)])
-   (thread
+   (thread/suspend-to-kill
     (lambda ()
       (let loop ()
         (with-handlers ([exn:fail?
@@ -298,29 +300,32 @@
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define ((make-url-connector u ssl-ctx proxies) conn)
-  (match-define (struct* url ([scheme s] [host h] [port p])) u)
   (begin0 conn
-    (unless (http-conn-live? conn)
-      (case s
-        [("http+unix")
-         (define path (form-urlencoded-decode h))
-         (define-values (in out)
-           (unix-socket-connect path))
-         (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
+    (cond
+      [(http-conn-live? conn)
+       (log-http-easy-debug "reusing connection to ~a" (pool-key u))]
 
-        [else
-         (or
-          (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
-            ((proxy-connect! p) conn u ssl-ctx))
-          (http-conn-open! conn h
-                           #:port (or p (if (equal? s "https") 443 80))
-                           #:ssl? (and (equal? s "https") ssl-ctx)))]))))
+      [else
+       (log-http-easy-debug "connecting to ~a" (pool-key u))
+       (match-define (struct* url ([scheme scheme] [host host] [port port])) u)
+       (case scheme
+         [("http+unix")
+          (define path (form-urlencoded-decode host))
+          (define-values (in out)
+            (unix-socket-connect path))
+          (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
+
+         [else
+          (or
+           (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
+             ((proxy-connect! p) conn u ssl-ctx))
+           (http-conn-open! conn host
+                            #:port (or port (if (equal? scheme "https") 443 80))
+                            #:ssl? (and (equal? scheme "https") ssl-ctx)))])])))
 
 (define (headers->list headers)
-  (for/list ([(name value) (in-hash headers)])
-    (bytes-append (symbol->bytes name) #": " (cond
-                                               [(bytes? value) value]
-                                               [else (string->bytes/utf-8 value)]))))
+  (for/list ([(k v) (in-hash headers)])
+    (bytes-append (symbol->bytes k) #": " (->bytes v))))
 
 (define ((port->data-procedure inp) write-chunk)
   (define buf (make-bytes (* 64 1024)))
@@ -333,17 +338,10 @@
 (define (pool-key u)
   (~a (url-scheme* u) "://" (url-host u) ":" (url-port* u)))
 
-(define (url-scheme* u)
-  (or (url-scheme u)
-      (case (url-port u)
-        [(443) "https"]
-        [else  "http"])))
-
-(define (url-port* u)
-  (or (url-port u)
-      (case (url-scheme u)
-        [("https") 443]
-        [else      80])))
+(define (->bytes v)
+  (cond
+    [(bytes? v) v]
+    [else (string->bytes/utf-8 v)]))
 
 
 ;; cookies ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
