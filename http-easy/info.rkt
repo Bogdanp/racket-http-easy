@@ -1,11 +1,11 @@
 #lang info
 
-(define version "0.3")
+(define version "0.3.1")
 (define collection "net")
 (define deps '("base"
                "memoize"
                "net-cookies-lib"
-               "resource-pool-lib"
+               ("resource-pool-lib" #:version "0.1")
                "unix-socket-lib"))
 (define build-deps '("net-cookies-doc"
                      "net-doc"

@@ -27,8 +27,7 @@
        (#:max-size limit/c
         #:idle-timeout timeout/c)
        pool-config?)
-  (pool-config max-size
-               idle-timeout))
+  (pool-config max-size idle-timeout))
 
 
 ;; pool ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
