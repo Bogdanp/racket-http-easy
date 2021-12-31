@@ -8,7 +8,9 @@
          racket/match
          racket/port
          xml
-         "common.rkt")
+         "common.rkt"
+         "logger.rkt"
+         "port.rkt")
 
 (provide
  status-code/c
@@ -53,7 +55,7 @@
 (define status-code/c
   (integer-in 100 999))
 
-(define/contract (make-response status headers out history closer)
+(define/contract (make-response status headers output history closer)
   (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response?)
   (match status
     [(regexp #rx"^HTTP/(...) ([1-9][0-9][0-9]) (.*)$"
@@ -61,17 +63,22 @@
                    http-version
                    (app bytes->number status-code)
                    status-message))
-     (response (make-semaphore 1)
-               status-line
-               http-version
-               status-code
-               status-message
-               headers
-               out
-               #f
-               history
-               closer
-               #f)]
+     (define-values (retaining-output retain)
+       (make-retaining-input-port output))
+     (define the-resp
+       (response (make-semaphore 1)
+                 status-line
+                 http-version
+                 status-code
+                 status-message
+                 headers
+                 retaining-output
+                 #f
+                 history
+                 closer
+                 #f))
+     (begin0 the-resp
+       (retain the-resp))]
 
     [_
      (raise-argument-error 'status "a valid status line" status)]))
@@ -147,7 +154,8 @@
           (copy-port inp (open-output-nowhere))
           (close-input-port inp))
         ((response-closer r) r)
-        (set-response-closed?! r #t)))))
+        (set-response-closed?! r #t)
+        (log-http-easy-debug "response closed")))))
 
 
 ;; match expanders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

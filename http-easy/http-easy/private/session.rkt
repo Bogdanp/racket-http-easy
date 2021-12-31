@@ -189,7 +189,7 @@
            (with-handlers ([exn:fail?
                             (lambda (e)
                               (channel-put resp-ch e))])
-             (define-values (resp-status resp-headers resp-out)
+             (define-values (resp-status resp-headers resp-output)
                (http-conn-sendrecv!
                 c path&query
                 #:close? close?
@@ -201,7 +201,7 @@
 
              (channel-put resp-ch (make-response resp-status
                                                  resp-headers
-                                                 resp-out
+                                                 resp-output
                                                  history
                                                  (lambda (_)
                                                    (session-release s u c))))))))
