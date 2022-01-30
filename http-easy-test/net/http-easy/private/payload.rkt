@@ -72,7 +72,7 @@
          "--the-boundary--")))
 
     (test-case "quoting"
-      (define-values (hs inp)
+      (define-values (_hs inp)
         ((multipart-payload
           #:boundary "boundary"
           (file-part "f" (open-input-string "hello") "a-name-with\\-and\""))

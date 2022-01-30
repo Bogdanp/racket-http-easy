@@ -1,8 +1,7 @@
 #lang racket/base
 
 (require memoize
-         net/url
-         racket/string)
+         net/url)
 
 (provide
  bytes->number
@@ -20,4 +19,6 @@
   (string->bytes/utf-8 (string-upcase (symbol->string m))))
 
 (define (url-path-string u)
-  (string-append "/" (string-join (map path/param-path (url-path u)) "/")))
+  (cond
+    [(null? (url-path u)) "/"]
+    [else (url->string (url #f #f #f #f #t (url-path u) null #f))]))

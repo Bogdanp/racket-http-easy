@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require (submod net/http-easy/private/url internal)
+(require net/http-easy/private/common
+         (submod net/http-easy/private/url internal)
          net/url
          rackunit)
 
@@ -10,6 +11,25 @@
 (define url-tests
   (test-suite
    "url"
+
+   (test-suite
+    "url-path-string"
+
+    (test-case "extracts various kinds of paths"
+      (define tests
+        '(("http://example.com"    . "/")
+          ("http://example.com/"   . "/")
+          ("://example.com/a/b/c"  . "/a/b/c")
+          ("/a/b/c/d"              . "/a/b/c/d")
+          ("/a/b/c/d/"             . "/a/b/c/d/")
+          ("/a/b?c=d"              . "/a/b")
+          ("/a;b/c"                . "/a;b/c")
+          ("/å/b/c"                . "/%C3%A5/b/c")))
+
+      (for* ([pair (in-list tests)]
+             [s (in-value (car pair))]
+             [e (in-value (cdr pair))])
+        (check-equal? (url-path-string (string->url* s)) e))))
 
    (test-suite
     "string->url*"
