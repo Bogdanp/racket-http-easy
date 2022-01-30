@@ -51,8 +51,10 @@
         [else      80])))
 
 (define (url-path&query u [params null])
-  (define path&query
-    (url->string (url #f #f #f #f #t (url-path u) (append (url-query u) params) #f)))
-  (cond
-    [(null? (url-path u)) (~a "/" path&query)]
-    [else path&query]))
+  (define path (url-path u))
+  (define all-params (append (url-query u) params))
+  (define abs-path
+    (if (null? path)
+        (list (path/param "" null))
+        path))
+  (url->string (url #f #f #f #f #t abs-path all-params #f)))
