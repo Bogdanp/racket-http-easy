@@ -9,7 +9,8 @@
  urlish/c
  ->url
  url-scheme*
- url-port*)
+ url-port*
+ url-path&query)
 
 (define urlish/c
   (or/c bytes? string? url?))
@@ -48,3 +49,10 @@
       (case (url-scheme u)
         [("https") 443]
         [else      80])))
+
+(define (url-path&query u [params null])
+  (define path&query
+    (url->string (url #f #f #f #f #t (url-path u) (append (url-query u) params) #f)))
+  (cond
+    [(null? (url-path u)) (~a "/" path&query)]
+    [else path&query]))

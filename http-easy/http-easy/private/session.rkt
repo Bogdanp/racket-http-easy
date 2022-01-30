@@ -162,7 +162,7 @@
                                         (data headers)
                                         (values headers data))])
         (values headers params data)))
-    (define path&query (make-path&query u params*))
+    (define path&query (url-path&query u params*))
     (define c (session-lease s u timeouts))
     (with-handlers ([exn:fail:http-easy?
                      (lambda (e)
@@ -251,13 +251,6 @@
            (will-register executor resp response-close!))])))
 
   (request (->url urlish)))
-
-(define (make-path&query u params)
-  (define path (url-path-string u))
-  (define all-params (append (url-query u) params))
-  (cond
-    [(null? all-params) path]
-    [else (string-append path "?" (alist->form-urlencoded all-params))]))
 
 (define (ensure-absolute-url orig location)
   (define location-url

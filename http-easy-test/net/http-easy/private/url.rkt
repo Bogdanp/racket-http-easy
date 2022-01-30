@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require net/http-easy/private/common
+(require net/http-easy/private/url
          (submod net/http-easy/private/url internal)
          net/url
          rackunit)
@@ -13,23 +13,27 @@
    "url"
 
    (test-suite
-    "url-path-string"
+    "url-path&query"
 
     (test-case "extracts various kinds of paths"
       (define tests
-        '(("http://example.com"    . "/")
-          ("http://example.com/"   . "/")
-          ("://example.com/a/b/c"  . "/a/b/c")
-          ("/a/b/c/d"              . "/a/b/c/d")
-          ("/a/b/c/d/"             . "/a/b/c/d/")
-          ("/a/b?c=d"              . "/a/b")
-          ("/a;b/c"                . "/a;b/c")
-          ("/å/b/c"                . "/%C3%A5/b/c")))
+        '(("http://example.com"    ()          "/")
+          ("http://example.com"    ((a . "b")) "/?a=b")
+          ("http://example.com/"   ()          "/")
+          ("://example.com/a/b/c"  ()          "/a/b/c")
+          ("/a/b/c/d"              ()          "/a/b/c/d")
+          ("/a/b/c/d/"             ()          "/a/b/c/d/")
+          ("/a/b?c=d"              ()          "/a/b?c=d")
+          ("/a/b?c=å"              ()          "/a/b?c=%C3%A5")
+          ("/a/b?c=å"              ((d . "e")) "/a/b?c=%C3%A5&d=e")
+          ("/a;b/c"                ()          "/a;b/c")
+          ("/å/b/c"                ()          "/%C3%A5/b/c")))
 
       (for* ([pair (in-list tests)]
              [s (in-value (car pair))]
-             [e (in-value (cdr pair))])
-        (check-equal? (url-path-string (string->url* s)) e))))
+             [p (in-value (cadr pair))]
+             [e (in-value (caddr pair))])
+        (check-equal? (url-path&query (string->url* s) p) e))))
 
    (test-suite
     "string->url*"
