@@ -58,10 +58,11 @@
 (define/contract (make-response status headers output history closer)
   (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response?)
   (match status
-    [(regexp #rx"^HTTP/(...) ([1-9][0-9][0-9]) (.*)$"
+    [(regexp #rx"^HTTP/(...) ([1-9][0-9][0-9])( (.*))?$"
              (list status-line
                    http-version
                    (app bytes->number status-code)
+                   _
                    status-message))
      (define-values (retaining-output retain)
        (make-retaining-input-port output))
