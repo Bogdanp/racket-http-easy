@@ -36,12 +36,14 @@
     (lambda (in out)
       (gzip-through-ports in out #f (current-seconds))))))
 
-(define/contract (json-payload v)
+(define/contract (json-payload v #:chunked? [chunked? #f])
   (-> jsexpr? payload-procedure/c)
   (lambda (hs)
     (values
      (hash-set hs 'content-type #"application/json; charset=utf-8")
-     (~>> v write-json))))
+     (if chunked?
+       (~>> v write-json)
+       (jsexpr->bytes v)))))
 
 (define/contract ((pure-payload v) hs)
   (-> (or/c bytes? string? input-port?) payload-procedure/c)
