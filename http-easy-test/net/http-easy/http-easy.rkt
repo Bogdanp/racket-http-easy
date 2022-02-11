@@ -6,7 +6,7 @@
          net/url
          racket/class
          racket/match
-         racket/port
+         racket/tcp
          rackunit
          web-server/dispatch
          (only-in web-server/http
@@ -337,7 +337,25 @@
                "http://127.0.0.1:9911"))
              (list
               (cons #"a.json" #"{}")
-              (cons #"b.json" #"{}")))))))))))
+              (cons #"b.json" #"{}"))))))))
+
+    (test-suite
+     "handle non-compliant servers"
+
+     ;; xref: racket-http-easy#18
+     (test-case "response without status reason"
+       (call-with-tcp-server
+        (lambda (_lines out)
+          (fprintf out "HTTP/1.1 200\r\n")
+          (fprintf out "Connection: close\r\n")
+          (fprintf out "Content-Length: 5\r\n")
+          (fprintf out "\r\n")
+          (fprintf out "hello"))
+        (lambda (port)
+          (check-equal?
+           (response-body
+            (get (format "http://127.0.0.1:~a" port)))
+           #"hello"))))))))
 
 (module+ test
   (require rackunit/text-ui)
