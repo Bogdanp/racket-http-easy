@@ -343,7 +343,7 @@
               (cons #"b.json" #"{}"))))))))
 
     (test-suite
-     "handle non-compliant servers"
+     "non-compliant servers"
 
      ;; xref: racket-http-easy#18
      (test-case "response without status reason"
