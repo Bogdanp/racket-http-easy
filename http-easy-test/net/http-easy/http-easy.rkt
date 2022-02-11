@@ -6,7 +6,6 @@
          net/url
          racket/class
          racket/match
-         racket/tcp
          rackunit
          web-server/dispatch
          (only-in web-server/http
@@ -135,10 +134,12 @@
                       (cons (binding-id bind) (binding:form-value bind)))
                     out))))
         (lambda ()
-          (check-equal? (read-response (post "http://127.0.0.1:9911"
-                                             #:stream? #t
-                                             #:form '((hello . "world"))))
-                        '((#"hello" . #"world"))))))
+          (check-equal?
+           (read-response
+            (post "http://127.0.0.1:9911"
+                  #:stream? #t
+                  #:form '((hello . "world"))))
+           '((#"hello" . #"world"))))))
 
      (test-case "can send json payloads"
        (call-with-web-server
@@ -147,10 +148,12 @@
            (lambda (out)
              (write (bytes->jsexpr (request-post-data/raw req)) out))))
         (lambda ()
-          (check-equal? (read-response (post "http://127.0.0.1:9911"
-                                             #:stream? #t
-                                             #:json (hasheq 'hello "world")))
-                        (hasheq 'hello "world"))))))
+          (check-equal?
+           (read-response
+            (post "http://127.0.0.1:9911"
+                  #:stream? #t
+                  #:json (hasheq 'hello "world")))
+           (hasheq 'hello "world"))))))
 
     (test-suite
      "redirects"

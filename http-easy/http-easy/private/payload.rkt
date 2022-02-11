@@ -41,7 +41,7 @@
   (lambda (hs)
     (values
      (hash-set hs 'content-type #"application/json; charset=utf-8")
-     (~>> v write-json))))
+     (jsexpr->bytes v))))
 
 (define/contract ((pure-payload v) hs)
   (-> (or/c bytes? string? input-port?) payload-procedure/c)
