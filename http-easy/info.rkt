@@ -3,7 +3,7 @@
 (define version "0.3.5")
 (define collection "net")
 (define deps '("base"
-               "memoize"
+               "memoize-lib"
                "net-cookies-lib"
                ("resource-pool-lib" #:version "0.1")
                "unix-socket-lib"))
