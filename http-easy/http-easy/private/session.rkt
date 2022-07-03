@@ -282,12 +282,9 @@
    (thread/suspend-to-kill
     (lambda ()
       (let loop ()
-        (with-handlers ([exn:fail?
-                         (lambda (e)
-                           (log-http-easy-warning "will execution failed: ~a" (exn-message e))
-                           (loop))])
-          (will-execute executor)
-          (loop)))))))
+        (with-handlers ([exn:fail? (λ (e) (log-http-easy-warning "will execution failed: ~a" (exn-message e)))])
+          (will-execute executor))
+        (loop))))))
 
 
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
