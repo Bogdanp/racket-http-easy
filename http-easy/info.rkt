@@ -1,15 +1,17 @@
 #lang info
 
-(define version "0.3.5")
 (define collection "net")
-(define deps '("base"
-               "memoize-lib"
-               "net-cookies-lib"
-               ("resource-pool-lib" #:version "0.1")
-               "unix-socket-lib"))
-(define build-deps '("net-cookies-doc"
-                     "net-doc"
-                     "racket-doc"
-                     "sandbox-lib"
-                     "scribble-lib"))
-(define scribblings '(("http-easy.scrbl")))
+(define deps
+  '("base"
+    "http-easy-lib"))
+(define build-deps
+  '("net-cookies-doc"
+    "net-cookies-lib"
+    "net-doc"
+    "racket-doc"
+    "sandbox-lib"
+    "scribble-lib"))
+(define implies
+  '("http-easy-lib"))
+(define scribblings
+  '(("http-easy.scrbl")))
