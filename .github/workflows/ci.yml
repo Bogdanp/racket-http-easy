@@ -5,12 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        racket-version: [ '8.5', '8.6', 'current' ]
-        racket-variant: [ 'BC', 'CS' ]
+        racket-version: ['8.6', '8.7', 'current']
+        racket-variant: ['BC', 'CS']
     name: Build & Test on Racket ${{ matrix.racket-version }} (${{ matrix.racket-variant }})
     steps:
       - uses: actions/checkout@master
-      - uses: Bogdanp/setup-racket@v1.8.1
+      - uses: Bogdanp/setup-racket@v1.9
         with:
           architecture: x64
           variant: ${{ matrix.racket-variant }}
