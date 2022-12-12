@@ -164,31 +164,28 @@
         (values headers params data)))
     (define path&query (url-path&query u params*))
     (define c (session-lease s u timeouts))
-    (with-handlers ([exn:fail:http-easy?
-                     (lambda (e)
-                       (raise e))]
-
-                    [exn:fail?
+    (with-handlers ([exn:fail?
                      (lambda (e)
                        (log-http-easy-warning "request failed: ~a" (exn-message e))
                        (http-conn-close! c)
                        (session-release s u c)
                        (cond
+                         [(exn:fail:http-easy? e)
+                          (raise e)]
                          [(< attempts max-attempts)
                           (log-http-easy-debug "retrying~n  attempts: ~a/~a" attempts max-attempts)
-                          (request u
-                                   #:attempts (add1 attempts)
-                                   #:history history)]
-
+                          (request
+                           #:attempts (add1 attempts)
+                           #:history history
+                           u)]
                          [else
                           (raise e)]))])
-      (define resp-ch (make-channel))
+      (define resp-ch
+        (make-channel))
       (define thd
         (thread
          (lambda ()
-           (with-handlers ([exn:fail?
-                            (lambda (e)
-                              (channel-put resp-ch e))])
+           (with-handlers ([exn:fail? (λ (e) (channel-put resp-ch e))])
              (define-values (resp-status resp-headers resp-output)
                (http-conn-sendrecv!
                 c path&query
@@ -198,13 +195,15 @@
                 #:data (if (input-port? data*)
                            (port->data-procedure data*)
                            data*)))
-
-             (channel-put resp-ch (make-response resp-status
-                                                 resp-headers
-                                                 resp-output
-                                                 history
-                                                 (lambda (_)
-                                                   (session-release s u c))))))))
+             (define resp
+               (make-response
+                resp-status
+                resp-headers
+                resp-output
+                history
+                (λ (_)
+                  (session-release s u c))))
+             (channel-put resp-ch resp)))))
       (define resp
         (sync
          (handle-evt
@@ -218,7 +217,6 @@
                         (* (timeout-config-request timeouts) 1000)))
           (lambda (_)
             (kill-thread thd)
-            (session-release s u c)
             (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
             (raise (make-timeout-error 'request))))))
       (log-http-easy-debug "response: ~.s" (response-status-line resp))

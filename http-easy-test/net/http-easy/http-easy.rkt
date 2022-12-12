@@ -301,18 +301,25 @@
      "timeouts"
 
      (test-case "raises response timeouts when the remote end is too slow"
+       (define counter 0)
        (call-with-web-server
         (lambda (_req)
           (sleep 3)
           (response/output
            (lambda (out)
-             (display "hello" out))))
+             (define id counter)
+             (set! counter (add1 counter))
+             (fprintf out "hello (~a)" id))))
         (lambda ()
           (check-exn
            exn:fail:http-easy:timeout?
            (lambda ()
              (get "http://127.0.0.1:9911"
-                  #:timeouts (make-timeout-config #:request 1))))))))
+                  #:timeouts (make-timeout-config #:request 1))))
+          ;; Issue #21
+          (check-equal?
+           (response-body (get "http://127.0.0.1:9911"))
+           #"hello (1)")))))
 
     (test-suite
      "multipart payloads"
