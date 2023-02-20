@@ -580,7 +580,11 @@ scheme and url-encode the path to the socket as the host.
 
 @subsection{Proxies}
 
-@deftech{Proxies} tunnel requests to one host through another.
+@(define socks5-doc (other-doc '(lib "socks5/socks5.rkt") #:indirect "socks5"))
+
+@deftech{Proxies} tunnel requests to one host through another.  See
+@socks5-doc for a @tt{SOCKS5} proxy implementation that is compatible
+with this library.
 
 @defproc[(proxy? [v any/c]) boolean?]{
   Returns @racket[#t] when @racket[v] is a @tech{proxy}.
