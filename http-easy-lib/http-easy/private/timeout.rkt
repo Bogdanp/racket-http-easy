@@ -8,7 +8,8 @@
  timeout-config?
  timeout-config-lease
  timeout-config-connect
- timeout-config-request)
+ timeout-config-request
+ make-request-timeout-evt)
 
 (define timeout/c
   (or/c false/c (and/c real? positive?)))
@@ -25,3 +26,9 @@
         #:request timeout/c)
        timeout-config?)
   (timeout-config lease connect request))
+
+(define (make-request-timeout-evt t)
+  (alarm-evt
+   (+ (current-inexact-monotonic-milliseconds)
+      (* (timeout-config-request t) 1000))
+   #t))
