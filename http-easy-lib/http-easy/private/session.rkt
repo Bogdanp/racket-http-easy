@@ -145,15 +145,18 @@
                          #:max-attempts [max-attempts 3]
                          #:max-redirects [max-redirects 16]
                          #:user-agent [user-agent (current-user-agent)])
+  (define the-data
+    (cond
+      [(supplied? form) (form-payload form)]
+      [(supplied? json) (json-payload json)]
+      [else data]))
+
   (define (go u
               #:method [method method]
               #:headers [headers headers]
               #:params [params params]
               #:auth [auth auth]
-              #:data [data (cond
-                             [(supplied? form) (form-payload form)]
-                             [(supplied? json) (json-payload json)]
-                             [else data])]
+              #:data [data the-data]
               #:history [history null]
               #:attempts [attempts-remaining max-attempts]
               #:redirects [redirects-remaining max-redirects])
