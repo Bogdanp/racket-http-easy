@@ -26,10 +26,40 @@
 ;; session ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide
- make-session
- session?
- session-close!
- session-request)
+ (contract-out
+  [make-session (->* ()
+                     (#:pool-config pool-config?
+                      #:ssl-context ssl-client-context?
+                      #:cookie-jar (is-a?/c cookie-jar<%>)
+                      #:proxies (listof proxy?))
+                     session?)]
+  [session? (-> any/c boolean?)]
+  [session-close! (-> session? void?)]
+  [session-request (->i ([s session?]
+                         [urlish urlish/c])
+                        (#:close? [close? boolean?]
+                         #:stream? [stream? boolean?]
+                         #:method [method method/c]
+                         #:headers [headers headers/c]
+                         #:params [params query-params/c]
+                         #:auth [auth (or/c false/c auth-procedure/c)]
+                         #:data [data (or/c false/c bytes? string? input-port? payload-procedure/c)]
+                         #:form [form form-data/c]
+                         #:json [json jsexpr?]
+                         #:timeouts [timeouts timeout-config?]
+                         #:max-attempts [max-attempts exact-positive-integer?]
+                         #:max-redirects [max-redirects exact-nonnegative-integer?]
+                         #:user-agent [user-agent (or/c bytes? string?)])
+
+                        #:pre/name (data form json)
+                        "at most one of the #:data, #:form or #:json keyword arguments"
+                        (cond
+                          [(supplied? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
+                          [(supplied? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
+                          [(supplied? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
+                          [else #t])
+
+                        [res response?])]))
 
 (define default-pool-config
   (make-pool-config))
@@ -37,25 +67,18 @@
 (struct session (cust sema conf pools ssl-ctx cookies proxies [closed? #:mutable])
   #:transparent)
 
-(define/contract (make-session
-                  #:pool-config [conf default-pool-config]
-                  #:ssl-context [ssl-ctx (ssl-secure-client-context)]
-                  #:cookie-jar [cookies #f]
-                  #:proxies [proxies null])
-  (->* ()
-       (#:pool-config pool-config?
-        #:ssl-context ssl-client-context?
-        #:cookie-jar (is-a?/c cookie-jar<%>)
-        #:proxies (listof proxy?))
-       session?)
+(define (make-session
+         #:pool-config [conf default-pool-config]
+         #:ssl-context [ssl-ctx (ssl-secure-client-context)]
+         #:cookie-jar [cookies #f]
+         #:proxies [proxies null])
   (define cust (make-custodian))
   (define s (session cust (make-semaphore 1) conf (make-hash) ssl-ctx cookies proxies #f))
   (begin0 s
     (will-register executor s session-close!)
     (log-http-easy-debug "session opened")))
 
-(define/contract (session-close! s)
-  (-> session? void?)
+(define (session-close! s)
   (call-with-semaphore (session-sema s)
     (lambda ()
       (unless (session-closed? s)
@@ -73,6 +96,7 @@
       (call-with-semaphore (session-sema s)
         (lambda ()
           (hash-ref! ps k (lambda ()
+                            (log-http-easy-debug "creating pool for key ~a" k)
                             (define ssl-ctx (session-ssl-ctx s))
                             (define proxies (session-proxies s))
                             (define connector (make-url-connector url ssl-ctx proxies))
@@ -88,6 +112,7 @@
         (hash-ref ps k #f))))
 
   (when p
+    (log-http-easy-debug "releasing connection to pool ~a" k)
     (pool-release p c)))
 
 (define default-timeout-config
@@ -96,47 +121,21 @@
 (define supplied?
   (compose1 not unsupplied-arg?))
 
-(define/contract (session-request s
-                                  urlish
-                                  #:close? [close? #f]
-                                  #:stream? [stream? #f]
-                                  #:method [method 'get]
-                                  #:headers [headers (hasheq)]
-                                  #:params [params null]
-                                  #:auth [auth #f]
-                                  #:data [data #f]
-                                  #:form [form the-unsupplied-arg]
-                                  #:json [json the-unsupplied-arg]
-                                  #:timeouts [timeouts default-timeout-config]
-                                  #:max-attempts [max-attempts 3]
-                                  #:max-redirects [max-redirects 16]
-                                  #:user-agent [user-agent (current-user-agent)])
-  (->i ([s session?]
-        [urlish urlish/c])
-       (#:close? [close? boolean?]
-        #:stream? [stream? boolean?]
-        #:method [method method/c]
-        #:headers [headers headers/c]
-        #:params [params query-params/c]
-        #:auth [auth (or/c false/c auth-procedure/c)]
-        #:data [data (or/c false/c bytes? string? input-port? payload-procedure/c)]
-        #:form [form form-data/c]
-        #:json [json jsexpr?]
-        #:timeouts [timeouts timeout-config?]
-        #:max-attempts [max-attempts exact-positive-integer?]
-        #:max-redirects [max-redirects exact-nonnegative-integer?]
-        #:user-agent [user-agent (or/c bytes? string?)])
-
-       #:pre/name (data form json)
-       "at most one of the #:data, #:form or #:json keyword arguments"
-       (cond
-         [(supplied? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
-         [(supplied? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
-         [(supplied? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
-         [else #t])
-
-       [res response?])
-
+(define (session-request s
+                         urlish
+                         #:close? [close? #f]
+                         #:stream? [stream? #f]
+                         #:method [method 'get]
+                         #:headers [headers (hasheq)]
+                         #:params [params null]
+                         #:auth [auth #f]
+                         #:data [data #f]
+                         #:form [form the-unsupplied-arg]
+                         #:json [json the-unsupplied-arg]
+                         #:timeouts [timeouts default-timeout-config]
+                         #:max-attempts [max-attempts 3]
+                         #:max-redirects [max-redirects 16]
+                         #:user-agent [user-agent (current-user-agent)])
   (define data*
     (cond
       [(supplied? form) (form-payload form)]
@@ -162,112 +161,112 @@
                                         (data headers)
                                         (values headers data))])
         (values headers params data)))
-    (define path&query (url-path&query u params*))
     (define c (session-lease s u timeouts))
-    (with-handlers ([exn:fail?
-                     (lambda (e)
-                       (log-http-easy-warning "request failed: ~a" (exn-message e))
-                       (http-conn-close! c)
-                       (session-release s u c)
-                       (cond
-                         [(exn:fail:http-easy? e)
-                          (raise e)]
-                         [(< attempts max-attempts)
-                          (log-http-easy-debug "retrying~n  attempts: ~a/~a" attempts max-attempts)
-                          (request
-                           #:attempts (add1 attempts)
-                           #:history history
-                           u)]
-                         [else
-                          (raise e)]))])
-      (define resp-ch
-        (make-channel))
-      (define thd
-        (thread
-         (lambda ()
-           (with-handlers ([exn:fail? (λ (e) (channel-put resp-ch e))])
-             (define-values (resp-status resp-headers resp-output)
-               (http-conn-sendrecv!
-                c path&query
-                #:close? close?
-                #:method (method->bytes method)
-                #:headers (headers->list headers*)
-                #:data (if (input-port? data*)
-                           (port->data-procedure data*)
-                           data*)))
-             (define resp
-               (make-response
-                resp-status
-                resp-headers
-                resp-output
-                history
-                (λ (_)
-                  (session-release s u c))))
-             (channel-put resp-ch resp)))))
-      (define resp
+    (define r
+      (with-handlers ([exn:fail?
+                       (lambda (e)
+                         (log-http-easy-warning "request failed: ~a" (exn-message e))
+                         (http-conn-close! c)
+                         (session-release s u c)
+                         (cond
+                           [(exn:fail:http-easy? e)
+                            (raise e)]
+                           [(< attempts max-attempts)
+                            (log-http-easy-debug "retrying~n  attempts: ~a/~a" attempts max-attempts)
+                            (request
+                             #:attempts (add1 attempts)
+                             #:history history
+                             u)]
+                           [else
+                            (raise e)]))])
+        (define resp-ch
+          (make-channel))
+        (define thd
+          (thread
+           (lambda ()
+             (with-handlers ([exn:fail? (λ (e) (channel-put resp-ch e))])
+               (define-values (resp-status resp-headers resp-output)
+                 (http-conn-sendrecv!
+                  c (url-path&query u params*)
+                  #:close? close?
+                  #:method (method->bytes method)
+                  #:headers (headers->list headers*)
+                  #:data (if (input-port? data*)
+                             (port->data-procedure data*)
+                             data*)))
+               (channel-put
+                resp-ch
+                (make-response
+                 resp-status
+                 resp-headers
+                 resp-output
+                 history
+                 (λ (_)
+                   (session-release s u c))))))))
         (sync
          (handle-evt
           resp-ch
-          (lambda (resp-or-exn)
-            (if (exn:fail? resp-or-exn)
-                (raise resp-or-exn)
-                resp-or-exn)))
+          (lambda (resp)
+            (when (exn:fail? resp)
+              (raise resp))
+            (begin0 resp
+              (log-http-easy-debug "response: ~.s" (response-status-line resp))
+              (maybe-save-cookies! s u (response-headers resp)))))
          (handle-evt
-          (alarm-evt (+ (current-inexact-milliseconds)
-                        (* (timeout-config-request timeouts) 1000)))
+          (alarm-evt
+           (+ (current-inexact-milliseconds)
+              (* (timeout-config-request timeouts) 1000)))
           (lambda (_)
             (kill-thread thd)
             (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
-            (raise (make-timeout-error 'request))))))
-      (log-http-easy-debug "response: ~.s" (response-status-line resp))
-      (maybe-save-cookies! s u (response-headers resp))
+            (raise (make-timeout-error 'request)))))))
 
-      (cond
-        [(and (positive? redirects-remaining) (redirect? resp))
-         (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
-         (define u* (ensure-absolute-url u location))
-         (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location)
-         (response-drain! resp)
-         (response-close! resp)
-         (request u*
-                  #:method (case (response-status-code resp)
-                             [(301 302) 'get]
-                             [(303)     'get]
-                             [(307)     method])
-                  #:headers (hash-remove headers 'authorization)
-                  #:auth (if (same-origin? u* u) auth #f)
-                  #:history (cons resp history)
-                  #:redirects (sub1 redirects-remaining))]
+    (cond
+      [(and (positive? redirects-remaining) (redirect? r))
+       (define location (bytes->string/utf-8 (response-headers-ref r 'location)))
+       (define u* (ensure-absolute-url u location))
+       (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code r) location)
+       (response-drain! r)
+       (response-close! r)
+       (request u*
+                #:method (case (response-status-code r)
+                           [(301 302 303) 'get]
+                           [(307)         method])
+                #:headers (hash-remove headers 'authorization)
+                #:auth (if (same-origin? u* u) auth #f)
+                #:history (cons r history)
+                #:redirects (sub1 redirects-remaining))]
 
-        [(or close? (not stream?))
-         (begin0 resp
-           (response-drain! resp)
-           (response-close! resp))]
+      [(or close? (not stream?))
+       (begin0 r
+         (response-drain! r)
+         (response-close! r))]
 
-        [else
-         (begin0 resp
-           (will-register executor resp response-close!))])))
+      [else
+       (begin0 r
+         (will-register executor r response-close!))]))
 
   (request (->url urlish)))
 
 (define (ensure-absolute-url orig location)
   (define location-url
-    (if (bytes? location)
-        (string->url (bytes->string/utf-8 location))
-        (string->url location)))
+    (string->url location))
   (cond
     [(url-host location-url) location-url]
     [else (combine-url/relative orig location)]))
 
 (define (same-origin? a b)
-  (and (equal? (url-scheme a) (url-scheme b))
-       (equal? (url-host a) (url-host b))
-       (equal? (url-port a) (url-port b))))
+  (and (equal? (url-scheme a)
+               (url-scheme b))
+       (equal? (url-host a)
+               (url-host b))
+       (equal? (url-port a)
+               (url-port b))))
 
 (define (redirect? resp)
-  (case (response-status-code resp)
-    [(301 302 303 307) (response-headers-ref resp 'location)]
-    [else #f]))
+  (and (memv (response-status-code resp) '(301 302 303 307))
+       (response-headers-ref resp 'location)
+       #t))
 
 
 ;; GC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
