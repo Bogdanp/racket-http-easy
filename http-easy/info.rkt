@@ -15,4 +15,4 @@
 (define implies
   '("http-easy-lib"))
 (define scribblings
-  '(("http-easy.scrbl")))
+  '(("http-easy.scrbl" () (net-library))))
