@@ -15,7 +15,7 @@
        (close-input-port p))
      (lambda () (port-progress-evt p))   ; get-progress-evt
      (lambda (amt progress-evt evt)      ; commit
-       (port-commit-peeked p amt progress-evt evt))
+       (port-commit-peeked amt progress-evt evt p))
      (lambda () (port-next-location p))  ; get-location
      (lambda () (port-count-lines! p))   ; count-lines!
      p                                   ; init-position
