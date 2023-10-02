@@ -45,8 +45,8 @@
          (response/output
           (lambda (out)
             (display "hello" out))))
-       (lambda ()
-         (check-equal? (response-body (get "http://127.0.0.1:9911")) #"hello"))))
+       (lambda (addr)
+         (check-equal? (response-body (get addr)) #"hello"))))
 
     (test-case "can make requests with query params"
       (call-with-web-server
@@ -57,25 +57,29 @@
                      (cons (bytes->string/utf-8 (binding-id bind))
                            (bytes->string/utf-8 (binding:form-value bind))))
                    out))))
-       (lambda ()
-         (check-equal? (read-response (get "http://127.0.0.1:9911"
-                                           #:stream? #t
-                                           #:params '((a . "1")
-                                                      (a . "2")
-                                                      (b . "3"))))
-                       '(("a" . "1")
-                         ("a" . "2")
-                         ("b" . "3")))
+       (lambda (addr)
+         (check-equal?
+          (read-response
+           (get addr
+                #:stream? #t
+                #:params '((a . "1")
+                           (a . "2")
+                           (b . "3"))))
+          '(("a" . "1")
+            ("a" . "2")
+            ("b" . "3")))
 
-         (check-equal? (read-response (get (string->url "http://127.0.0.1:9911?a=0")
-                                           #:stream? #t
-                                           #:params '((a . "1")
-                                                      (a . "2")
-                                                      (b . "3"))))
-                       '(("a" . "0")
-                         ("a" . "1")
-                         ("a" . "2")
-                         ("b" . "3"))))))
+         (check-equal?
+          (read-response
+           (get (string->url (format "~a?a=0" addr))
+                #:stream? #t
+                #:params '((a . "1")
+                           (a . "2")
+                           (b . "3"))))
+          '(("a" . "0")
+            ("a" . "1")
+            ("a" . "2")
+            ("b" . "3"))))))
 
     (test-case "#:close? sends 'Connection: close' header"
       (call-with-web-server
@@ -83,9 +87,13 @@
          (response/output
           (lambda (out)
             (write (header-value (headers-assq* #"connection" (request-headers/raw req))) out))))
-       (lambda ()
-         (check-equal? (read (open-input-bytes (response-body (get "http://127.0.0.1:9911" #:close? #t))))
-                       #"close"))))
+       (lambda (addr)
+         (check-equal?
+          (read
+           (open-input-bytes
+            (response-body
+             (get addr #:close? #t))))
+          #"close"))))
 
     (test-suite
      "bodies"
@@ -96,10 +104,10 @@
           (response/output
            (lambda (out)
              (display (request-post-data/raw req) out))))
-        (lambda ()
-          (check-equal? (response-body (post "http://127.0.0.1:9911" #:data #"hello")) #"hello")
-          (check-equal? (response-body (post "http://127.0.0.1:9911" #:data "hello")) #"hello")
-          (check-equal? (response-body (post "http://127.0.0.1:9911" #:data (open-input-string "hello"))) #"hello")))))
+        (lambda (addr)
+          (check-equal? (response-body (post addr #:data #"hello")) #"hello")
+          (check-equal? (response-body (post addr #:data "hello")) #"hello")
+          (check-equal? (response-body (post addr #:data (open-input-string "hello"))) #"hello")))))
 
     (test-suite
      "auth"
@@ -115,12 +123,16 @@
 
                [_
                 (write 'fail out)]))))
-        (lambda ()
-          (check-equal? (read-response (get "http://127.0.0.1:9911" #:stream? #t)) 'fail)
-          (check-equal? (read-response (get "http://127.0.0.1:9911"
-                                            #:stream? #t
-                                            #:auth (basic-auth "Aladdin" "OpenSesame")))
-                        'ok)))))
+        (lambda (addr)
+          (check-equal?
+           (read-response
+            (get addr #:stream? #t)) 'fail)
+          (check-equal?
+           (read-response
+            (get addr
+                 #:stream? #t
+                 #:auth (basic-auth "Aladdin" "OpenSesame")))
+           'ok)))))
 
     (test-suite
      "json"
@@ -133,10 +145,10 @@
              (write (for/list ([bind (in-list (request-bindings/raw req))])
                       (cons (binding-id bind) (binding:form-value bind)))
                     out))))
-        (lambda ()
+        (lambda (addr)
           (check-equal?
            (read-response
-            (post "http://127.0.0.1:9911"
+            (post addr
                   #:stream? #t
                   #:form '((hello . "world"))))
            '((#"hello" . #"world"))))))
@@ -147,10 +159,10 @@
           (response/output
            (lambda (out)
              (write (bytes->jsexpr (request-post-data/raw req)) out))))
-        (lambda ()
+        (lambda (addr)
           (check-equal?
            (read-response
-            (post "http://127.0.0.1:9911"
+            (post addr
                   #:stream? #t
                   #:json (hasheq 'hello "world")))
            (hasheq 'hello "world"))))))
@@ -177,15 +189,14 @@
 
        (call-with-web-server
         dispatch
-
-        (lambda ()
+        (lambda (addr)
           (test-case "can follow redirects"
-            (check-equal? (response-body (get "http://127.0.0.1:9911")) #"hello"))
+            (check-equal? (response-body (get addr)) #"hello"))
 
           (test-case "redirects can be exhausted"
-            (check-equal? (response-status-code (get "http://127.0.0.1:9911"
-                                                     #:max-redirects 1))
-                          302)))))
+            (check-equal?
+             (response-status-code (get addr #:max-redirects 1))
+             302)))))
 
      (test-case "303 redirects change the request method to GET"
        (define-values (dispatch _)
@@ -204,8 +215,8 @@
 
        (call-with-web-server
         dispatch
-        (lambda ()
-          (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))
+        (lambda (addr)
+          (check-equal? (response-body (post addr)) #"hello"))))
 
      (test-case "307 redirects preserve the request method"
        (define-values (dispatch _)
@@ -224,29 +235,28 @@
 
        (call-with-web-server
         dispatch
-        (lambda ()
-          (check-equal? (response-body (post "http://127.0.0.1:9911")) #"hello"))))
+        (lambda (addr)
+          (check-equal? (response-body (post addr)) #"hello"))))
 
      (test-case "redirects to other origins discard auth"
-       (define-values (dispatch _)
-         (dispatch-rules
-          [("")
-           (lambda (_)
-             (redirect-to "/a"))]
-
-          [("a")
-           (lambda (_)
-             (redirect-to "http://127.0.0.1:9912"))]))
-
        (call-with-web-server
-        #:port 9912
         (lambda (req)
           (response/output
            (lambda (out)
              (if (headers-assq* #"authorization" (request-headers/raw req))
                  (write 'fail out)
                  (write 'ok out)))))
-        (lambda ()
+        (lambda (addr-1)
+          (define-values (dispatch _)
+            (dispatch-rules
+             [("")
+              (lambda (_)
+                (redirect-to "/a"))]
+
+             [("a")
+              (lambda (_)
+                (redirect-to addr-1))]))
+
           (call-with-web-server
            (lambda (req)
              (match (headers-assq* #"authorization" (request-headers/raw req))
@@ -257,11 +267,13 @@
                 (response/output
                  (lambda (out)
                    (write 'fail/auth out)))]))
-           (lambda ()
-             (check-equal? (read-response (get "http://127.0.0.1:9911"
-                                               #:stream? #t
-                                               #:auth (basic-auth "Aladdin" "OpenSesame")))
-                           'ok)))))))
+           (lambda (addr-2)
+             (check-equal?
+              (read-response
+               (get addr-2
+                    #:stream? #t
+                    #:auth (basic-auth "Aladdin" "OpenSesame")))
+              'ok)))))))
 
     (test-suite
      "cookies"
@@ -274,9 +286,9 @@
                                                        (make-cookie "a-cookie" "hello"))))
            (lambda (out)
              (write (headers-assq* #"cookie" (request-headers/raw req)) out))))
-        (lambda ()
-          (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t)))
-          (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t))))))
+        (lambda (addr)
+          (check-false (read-response (get addr #:stream? #t)))
+          (check-false (read-response (get addr #:stream? #t))))))
 
      (test-case "cookie jars preserve cookies"
        (call-with-web-server
@@ -291,10 +303,10 @@
                      (write (header-value hdr) out))]
 
                [else (write #f out)]))))
-        (lambda ()
+        (lambda (addr)
           (parameterize ([current-session (make-session #:cookie-jar (new list-cookie-jar%))])
-            (check-false (read-response (get "http://127.0.0.1:9911" #:stream? #t)))
-            (check-equal? (read-response (get "http://127.0.0.1:9911" #:stream? #t))
+            (check-false (read-response (get addr #:stream? #t)))
+            (check-equal? (read-response (get addr #:stream? #t))
                           #"a-cookie=hello"))))))
 
     (test-suite
@@ -310,15 +322,14 @@
              (define id counter)
              (set! counter (add1 counter))
              (fprintf out "hello (~a)" id))))
-        (lambda ()
+        (lambda (addr)
           (check-exn
            exn:fail:http-easy:timeout?
            (lambda ()
-             (get "http://127.0.0.1:9911"
-                  #:timeouts (make-timeout-config #:request 1))))
+             (get addr #:timeouts (make-timeout-config #:request 1))))
           ;; Issue #21
           (check-equal?
-           (response-body (get "http://127.0.0.1:9911"))
+           (response-body (get addr))
            #"hello (1)")))))
 
     (test-suite
@@ -334,7 +345,7 @@
                 (cons (binding:file-filename f)
                       (binding:file-content f)))
               out))))
-        (lambda ()
+        (lambda (addr)
           (parameterize ([current-session (make-session)])
             (check-equal?
              (read-response
@@ -344,7 +355,7 @@
                        (field-part "a" (open-input-string "hello"))
                        (file-part "f" (open-input-string "{}") "a.json")
                        (file-part "f" (open-input-string "{}") "b.json"))
-               "http://127.0.0.1:9911"))
+               addr))
              (list
               (cons #"a.json" #"{}")
               (cons #"b.json" #"{}"))))))))
@@ -377,9 +388,9 @@
           (response/output
            (lambda (out)
              (displayln "hello, world!" out))))
-        (lambda ()
+        (lambda (addr)
           (parameterize ([current-session (make-session)])
-            (define r (get #:stream? #t "http://127.0.0.1:9911"))
+            (define r (get #:stream? #t addr))
             (define in (response-output r))
             (check-equal? (peek-bytes 5 0 in) #"hello")
             (check-true (port-commit-peeked 5 (port-progress-evt in) always-evt in))

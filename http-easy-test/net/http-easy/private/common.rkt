@@ -51,21 +51,21 @@
       (channel-put stop-ch #t)
       (tcp-close listener))))
 
-(define (call-with-web-server start proc #:port [port 9911])
+(define (call-with-web-server start proc)
   (define ch (make-async-channel))
   (define stop
     (serve
-     #:port port
+     #:port 0
      #:dispatch (dispatch/servlet start)
      #:confirmation-channel ch))
 
-  (define maybe-e (sync ch))
-  (when (exn:fail? maybe-e)
-    (raise maybe-e))
+  (define exn-or-port (sync ch))
+  (when (exn:fail? exn-or-port)
+    (raise exn-or-port))
 
   (dynamic-wind
     void
     (lambda ()
-      (proc))
+      (proc (format "http://127.0.0.1:~a" exn-or-port)))
     (lambda ()
       (stop))))
