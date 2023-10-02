@@ -14,8 +14,8 @@
        (set-box! the-box #f)
        (close-input-port p))
      (lambda () (port-progress-evt p))   ; get-progress-evt
-     (lambda (amt progress-evt evt)      ; commit
-       (port-commit-peeked amt progress-evt evt p))
+     (lambda (amt progress evt)          ; commit
+       (port-commit-peeked amt progress evt p))
      (lambda () (port-next-location p))  ; get-location
      (lambda () (port-count-lines! p))   ; count-lines!
      p                                   ; init-position

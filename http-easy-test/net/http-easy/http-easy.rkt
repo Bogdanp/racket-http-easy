@@ -365,7 +365,25 @@
           (check-equal?
            (response-body
             (get (format "http://127.0.0.1:~a" port)))
-           #"hello"))))))))
+           #"hello")))))
+
+    (test-suite
+     "custom port"
+
+     ;; xref: racket-http-easy#26
+     (test-case "can commit peeked progress"
+       (call-with-web-server
+        (lambda (_req)
+          (response/output
+           (lambda (out)
+             (displayln "hello, world!" out))))
+        (lambda ()
+          (parameterize ([current-session (make-session)])
+            (define r (get #:stream? #t "http://127.0.0.1:9911"))
+            (define in (response-output r))
+            (check-equal? (peek-bytes 5 0 in) #"hello")
+            (check-true (port-commit-peeked 5 (port-progress-evt in) always-evt in))
+            (check-equal? (read-bytes 8 in) #", world!")))))))))
 
 (module+ test
   (require rackunit/text-ui)
