@@ -1,7 +1,7 @@
 #lang racket/base
 
 (require (for-syntax racket/base
-                     syntax/parse)
+                     syntax/parse/pre)
          racket/contract/base
          "http-easy/private/auth.rkt"
          "http-easy/private/contract.rkt"
