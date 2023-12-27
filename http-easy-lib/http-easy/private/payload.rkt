@@ -4,26 +4,25 @@
          file/md5
          json
          net/uri-codec
-         racket/contract
+         racket/contract/base
          racket/format
          racket/match
          racket/port
          "contract.rkt")
 
 (provide
- form-payload
- gzip-payload
- json-payload
- pure-payload)
+ (contract-out
+  [form-payload (-> form-data/c payload-procedure/c)]
+  [gzip-payload (-> payload-procedure/c payload-procedure/c)]
+  [json-payload (-> jsexpr? payload-procedure/c)]
+  [pure-payload (-> (or/c bytes? string? input-port?) payload-procedure/c)]))
 
-(define/contract (form-payload v)
-  (-> form-data/c payload-procedure/c)
+(define (form-payload v)
   (define data (alist->form-urlencoded v))
   (lambda (hs)
     (values (hash-set hs 'content-type #"application/x-www-form-urlencoded; charset=utf-8") data)))
 
-(define/contract ((gzip-payload p) hs)
-  (-> payload-procedure/c payload-procedure/c)
+(define ((gzip-payload p) hs)
   (define-values (hs* data)
     (p hs))
   (values
@@ -36,25 +35,28 @@
     (lambda (in out)
       (gzip-through-ports in out #f (current-seconds))))))
 
-(define/contract (json-payload v)
-  (-> jsexpr? payload-procedure/c)
+(define (json-payload v)
   (lambda (hs)
     (values
      (hash-set hs 'content-type #"application/json; charset=utf-8")
      (jsexpr->bytes v))))
 
-(define/contract ((pure-payload v) hs)
-  (-> (or/c bytes? string? input-port?) payload-procedure/c)
+(define ((pure-payload v) hs)
   (values hs v))
 
 
 ;; multipart ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide
- multipart-payload
- part?
- field-part
- file-part)
+ (contract-out
+  [part? (-> any/c boolean?)]
+  [field-part (->* (stringy/c (or/c stringy/c input-port?)) (stringy/c) part:field?)]
+  [file-part (->* (stringy/c input-port?) (stringy/c stringy/c) part:file?)]
+  [multipart-payload
+   (->* ()
+        (#:boundary (or/c bytes? string?))
+        #:rest (non-empty-listof part?)
+        payload-procedure/c)]))
 
 (struct part (id) #:transparent)
 (struct part:field part (content-type value) #:transparent)
@@ -63,19 +65,13 @@
 (define stringy/c
   (or/c bytes? string?))
 
-(define/contract (field-part id value [content-type #"text/plain"])
-  (->* (stringy/c (or/c stringy/c input-port?)) (stringy/c) part:field?)
+(define (field-part id value [content-type #"text/plain"])
   (part:field id content-type value))
 
-(define/contract (file-part id inp [filename (~a (object-name inp))] [content-type #"application/octet-stream"])
-  (->* (stringy/c input-port?) (stringy/c stringy/c) part:file?)
+(define (file-part id inp [filename (~a (object-name inp))] [content-type #"application/octet-stream"])
   (part:file id content-type filename inp))
 
-(define/contract ((multipart-payload #:boundary [boundary #f] . fs) hs)
-  (->* ()
-       (#:boundary (or/c bytes? string?))
-       #:rest (non-empty-listof part?)
-       payload-procedure/c)
+(define ((multipart-payload #:boundary [boundary #f] . fs) hs)
   (let ([boundary (or boundary (generate-boundary))])
     (values
      (hash-set hs 'content-type (format "multipart/form-data; boundary=~a" boundary))

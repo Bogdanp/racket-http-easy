@@ -2,7 +2,7 @@
 
 (require (for-syntax racket/base
                      syntax/parse)
-         racket/contract
+         racket/contract/base
          "http-easy/private/auth.rkt"
          "http-easy/private/contract.rkt"
          "http-easy/private/error.rkt"
@@ -35,10 +35,10 @@
  (all-from-out "http-easy/private/session.rkt")
  (all-from-out "http-easy/private/user-agent.rkt")
 
- current-session)
+ (contract-out
+  [current-session (parameter/c session?)]))
 
-(define/contract current-session
-  (parameter/c session?)
+(define current-session
   (make-parameter (make-session)))
 
 (define (make-requester method)

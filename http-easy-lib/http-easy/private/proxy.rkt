@@ -3,31 +3,29 @@
 (require net/http-client
          net/url
          openssl
-         racket/contract
+         racket/contract/base
          "url.rkt")
 
 (provide
  proxy?
- make-proxy
  proxy-matches?
  proxy-connect!
 
- make-http-proxy
- make-https-proxy)
+ (contract-out
+  [make-proxy (-> (-> url? boolean?) (-> http-conn? url? (or/c #f ssl-client-context?) void?) proxy?)]
+  [make-http-proxy (->* (urlish/c) ((-> url? boolean?)) proxy?)]
+  [make-https-proxy (->* (urlish/c) ((-> url? boolean?)) proxy?)]))
 
 (struct proxy (matches? connect!)
   #:transparent)
 
-(define/contract (make-proxy matches? connect!)
-  (-> (-> url? boolean?) (-> http-conn? url? (or/c #f ssl-client-context?) void?) proxy?)
+(define (make-proxy matches? connect!)
   (proxy matches? connect!))
 
-(define/contract (make-http-proxy urlish [matches? (λ (u) (equal? (url-scheme u) "http"))])
-  (->* (urlish/c) ((-> url? boolean?)) proxy?)
+(define (make-http-proxy urlish [matches? (λ (u) (equal? (url-scheme u) "http"))])
   (proxy matches? (make-proxy-connector urlish 80 (λ (_) #f))))
 
-(define/contract (make-https-proxy urlish [matches? (λ (u) (equal? (url-scheme u) "https"))])
-  (->* (urlish/c) ((-> url? boolean?)) proxy?)
+(define (make-https-proxy urlish [matches? (λ (u) (equal? (url-scheme u) "https"))])
   (proxy matches? (make-proxy-connector urlish 443)))
 
 (define (make-proxy-connector urlish default-port [ssl-ctx-f values])

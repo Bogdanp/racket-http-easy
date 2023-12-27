@@ -1,7 +1,7 @@
 #lang racket/base
 
 (require net/url
-         racket/contract)
+         racket/contract/base)
 
 (provide
  method/c

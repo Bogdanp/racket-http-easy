@@ -2,7 +2,7 @@
 
 (require (prefix-in d: data/pool)
          net/http-client
-         racket/contract
+         racket/contract/base
          "error.rkt"
          "logger.rkt"
          "timeout.rkt")
@@ -11,8 +11,13 @@
 
 (provide
  limit/c
- make-pool-config
- pool-config?)
+ pool-config?
+ (contract-out
+  [make-pool-config
+   (->* ()
+        (#:max-size limit/c
+         #:idle-timeout timeout/c)
+        pool-config?)]))
 
 (struct pool-config (max-size idle-timeout)
   #:transparent)
@@ -20,13 +25,9 @@
 (define limit/c
   (or/c +inf.0 exact-positive-integer?))
 
-(define/contract (make-pool-config
-                  #:max-size [max-size 128]
-                  #:idle-timeout [idle-timeout 600])
-  (->* ()
-       (#:max-size limit/c
-        #:idle-timeout timeout/c)
-       pool-config?)
+(define (make-pool-config
+         #:max-size [max-size 128]
+         #:idle-timeout [idle-timeout 600])
   (pool-config max-size idle-timeout))
 
 
@@ -34,11 +35,12 @@
 
 (provide
  connector/c
- make-pool
- pool?
- pool-lease
- pool-release
- pool-close!)
+ (contract-out
+  [make-pool (-> pool-config? connector/c pool?)]
+  [pool? (-> any/c boolean?)]
+  [pool-lease (->* (pool?) ((or/c #f timeout-config?)) http-conn?)]
+  [pool-release (-> pool? http-conn? void?)]
+  [pool-close! (-> pool? void?)]))
 
 (define connector/c
   (-> http-conn? http-conn?))
@@ -46,8 +48,7 @@
 (struct pool (connector impl)
   #:transparent)
 
-(define/contract (make-pool conf connector)
-  (-> pool-config? connector/c pool?)
+(define (make-pool conf connector)
   (pool
    connector
    (d:make-pool
@@ -56,8 +57,7 @@
     http-conn
     http-conn-close!)))
 
-(define/contract (pool-lease p [t #f])
-  (->* (pool?) ((or/c #f timeout-config?)) http-conn?)
+(define (pool-lease p [t #f])
   (define impl (pool-impl p))
   (define maybe-lease-timeout-ms
     (and t (seconds->ms (timeout-config-lease t))))
@@ -95,12 +95,10 @@
     [else
      (raise (make-timeout-error 'lease))]))
 
-(define/contract (pool-release p c)
-  (-> pool? http-conn? void?)
+(define (pool-release p c)
   (d:pool-release! (pool-impl p) c))
 
-(define/contract (pool-close! p)
-  (-> pool? void?)
+(define (pool-close! p)
   (d:pool-close! (pool-impl p))
   (log-http-easy-debug "connection pool closed"))
 

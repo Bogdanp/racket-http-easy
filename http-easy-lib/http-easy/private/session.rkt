@@ -7,7 +7,7 @@
          net/url
          openssl
          racket/class
-         racket/contract
+         racket/contract/base
          racket/format
          racket/match
          racket/unix-socket

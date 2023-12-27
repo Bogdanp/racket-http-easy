@@ -4,7 +4,7 @@
                      syntax/parse
                      "common.rkt")
          json
-         racket/contract
+         racket/contract/base
          racket/match
          racket/port
          xml
@@ -14,27 +14,26 @@
 
 (provide
  status-code/c
- make-response
  response?
  response-status-line
  response-http-version
  response-status-code
  response-status-message
  response-headers
- response-headers-ref
- response-headers-ref*
- response-history
  response-output
- response-body
- response-json
- response-xexpr
- response-xml
- response-drain!
- response-close!
- read-response
- read-response-json
- read-response-xexpr
- read-response-xml)
+ response-history
+ (contract-out
+  [make-response (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response?)]
+  [response-body (-> response? bytes?)]
+  [response-json (-> response? (or/c eof-object? jsexpr?))]
+  [response-xexpr (-> response? xexpr?)]
+  [response-xml (-> response? document?)]
+  [read-response (-> response? any/c)]
+  [read-response-json (-> response? (or/c eof-object? jsexpr?))]
+  [read-response-xexpr (-> response? xexpr?)]
+  [read-response-xml (-> response? document?)]
+  [response-drain! (-> response? void?)]
+  [response-close! (-> response? void?)]))
 
 (struct response
   (sema
@@ -55,8 +54,7 @@
 (define status-code/c
   (integer-in 100 999))
 
-(define/contract (make-response status headers output history closer)
-  (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response?)
+(define (make-response status headers output history closer)
   (match status
     [(regexp #rx#"^HTTP/(...) ([1-9][0-9][0-9])(?: (.*))?$"
              (list status-line
@@ -84,57 +82,50 @@
      (raise-argument-error 'status "a valid status line" status)]))
 
 (define-syntax-rule (define-headers-ref id for-form)
-  (define/contract (id r h)
-    (-> response? symbol? any/c)
-    (define h:bs (symbol->bytes h))
-    (define re (byte-regexp (bytes-append #"^(?i:" (regexp-quote h:bs) #"): ")))
-    (for-form ([header (in-list (response-headers r))]
-               #:when (regexp-match re header))
-      (subbytes header (+ 2 (bytes-length h:bs))))))
+  (begin
+    (provide
+     (contract-out [id (-> response? symbol? any/c)]))
+    (define (id r h)
+      (define h:bs (symbol->bytes h))
+      (define re (byte-regexp (bytes-append #"^(?i:" (regexp-quote h:bs) #"): ")))
+      (for-form ([header (in-list (response-headers r))]
+                 #:when (regexp-match re header))
+                (subbytes header (+ 2 (bytes-length h:bs)))))))
 
 (define-headers-ref response-headers-ref for/first)
 (define-headers-ref response-headers-ref* for/list)
 
-(define/contract (response-body r)
-  (-> response? bytes?)
+(define (response-body r)
   (unless (response-data r)
     (response-drain! r))
   (response-data r))
 
-(define/contract (response-json r)
-  (-> response? (or/c eof-object? jsexpr?))
+(define (response-json r)
   (bytes->jsexpr (response-body r)))
 
-(define/contract (response-xexpr r)
-  (-> response? xexpr?)
+(define (response-xexpr r)
   (xml->xexpr
    (document-element
     (response-xml r))))
 
-(define/contract (response-xml r)
-  (-> response? document?)
+(define (response-xml r)
   (read-xml/document (open-input-bytes (response-body r))))
 
-(define/contract (read-response r)
-  (-> response? any/c)
+(define (read-response r)
   (read (response-output r)))
 
-(define/contract (read-response-json r)
-  (-> response? (or/c eof-object? jsexpr?))
+(define (read-response-json r)
   (read-json (response-output r)))
 
-(define/contract (read-response-xexpr r)
-  (-> response? xexpr?)
+(define (read-response-xexpr r)
   (xml->xexpr
    (document-element
     (read-response-xml r))))
 
-(define/contract (read-response-xml r)
-  (-> response? document?)
+(define (read-response-xml r)
   (read-xml/document (response-output r)))
 
-(define/contract (response-drain! r)
-  (-> response? void?)
+(define (response-drain! r)
   (call-with-semaphore (response-sema r)
     (lambda ()
       (unless (response-data r)
@@ -144,8 +135,7 @@
           (set-response-data! r data)
           (close-input-port inp))))))
 
-(define/contract (response-close! r)
-  (-> response? void?)
+(define (response-close! r)
   (call-with-semaphore (response-sema r)
     (lambda ()
       (unless (response-closed? r)
