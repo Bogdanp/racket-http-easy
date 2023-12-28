@@ -1,9 +1,12 @@
 #lang racket/base
 
-(require net/base64
-         racket/contract/base
+(require racket/contract/base
+         racket/lazy-require
          racket/port
          "contract.rkt")
+
+(lazy-require
+ [net/base64 (base64-encode)])
 
 (provide
  (contract-out

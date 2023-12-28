@@ -1,7 +1,6 @@
 #lang racket/base
 
-(require json
-         net/cookies/user-agent
+(require net/cookies/user-agent
          net/http-client
          net/uri-codec
          net/url
@@ -9,8 +8,8 @@
          racket/class
          racket/contract/base
          racket/format
+         racket/lazy-require
          racket/match
-         racket/unix-socket
          "common.rkt"
          "contract.rkt"
          "error.rkt"
@@ -22,6 +21,10 @@
          "timeout.rkt"
          "url.rkt"
          "user-agent.rkt")
+
+(lazy-require
+ [json (jsexpr?)]
+ [racket/unix-socket (unix-socket-connect)])
 
 ;; session ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

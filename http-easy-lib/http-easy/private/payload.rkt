@@ -1,14 +1,17 @@
 #lang racket/base
 
-(require file/gzip
-         file/md5
-         json
-         net/uri-codec
-         racket/contract/base
+(require racket/contract/base
          racket/format
+         racket/lazy-require
          racket/match
          racket/port
          "contract.rkt")
+
+(lazy-require
+ [file/gzip (gzip-through-ports)]
+ [file/md5 (md5)]
+ [json (jsexpr? jsexpr->bytes)]
+ [net/uri-codec (alist->form-urlencoded)])
 
 (provide
  (contract-out

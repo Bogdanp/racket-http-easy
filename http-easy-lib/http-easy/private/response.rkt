@@ -3,14 +3,23 @@
 (require (for-syntax racket/base
                      syntax/parse/pre
                      "common.rkt")
-         json
          racket/contract/base
+         racket/lazy-require
          racket/match
          racket/port
-         xml
          "common.rkt"
          "logger.rkt"
          "port.rkt")
+
+(lazy-require
+ [json (bytes->jsexpr
+        jsexpr?
+        read-json)]
+ [xml (document?
+       document-element
+       read-xml/document
+       xexpr?
+       xml->xexpr)])
 
 (provide
  status-code/c
