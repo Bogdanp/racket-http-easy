@@ -8,9 +8,11 @@
  lib-version)
 
 (begin-for-syntax
-  (define this-path (simplify-path (build-path (path-only (syntax-source #'here)) 'up 'up)))
+  (define this-path (build-path (path-only (syntax-source #'here)) 'up 'up))
   (define info-ref (get-info/full this-path)))
 
-(define-syntax (lib-version stx)
-  (syntax-case stx ()
-    [(_) (datum->syntax stx (info-ref 'version))]))
+(define-syntax (get-lib-version stx)
+  (datum->syntax stx (info-ref 'version)))
+
+(define (lib-version)
+  (get-lib-version))
