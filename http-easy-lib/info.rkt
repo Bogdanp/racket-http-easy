@@ -4,7 +4,7 @@
 (define version "0.5")
 (define collection "net")
 (define deps
-  '("base"
+  '(["base" #:version "8.1.0.4"]
     "net-cookies-lib"
     ["resource-pool-lib" #:version "0.1"]
     "unix-socket-lib"))
