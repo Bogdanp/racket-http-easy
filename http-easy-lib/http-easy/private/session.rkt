@@ -30,11 +30,11 @@
 
 (provide
  (contract-out
-  [make-session (->* ()
-                     (#:pool-config pool-config?
-                      #:ssl-context ssl-client-context?
+  [make-session (->* []
+                     [#:pool-config pool-config?
+                      #:ssl-context (or/c #f ssl-client-context?)
                       #:cookie-jar (is-a?/c cookie-jar<%>)
-                      #:proxies (listof proxy?))
+                      #:proxies (listof proxy?)]
                      session?)]
   [session? (-> any/c boolean?)]
   [session-close! (-> session? void?)]
@@ -45,8 +45,8 @@
                          #:method [method method/c]
                          #:headers [headers headers/c]
                          #:params [params query-params/c]
-                         #:auth [auth (or/c false/c auth-procedure/c)]
-                         #:data [data (or/c false/c bytes? string? input-port? payload-procedure/c)]
+                         #:auth [auth (or/c #f auth-procedure/c)]
+                         #:data [data (or/c #f bytes? string? input-port? payload-procedure/c)]
                          #:form [form form-data/c]
                          #:json [json jsexpr?]
                          #:timeouts [timeouts timeout-config?]
