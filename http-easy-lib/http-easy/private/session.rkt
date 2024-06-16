@@ -148,6 +148,8 @@
                          #:max-attempts [max-attempts 3]
                          #:max-redirects [max-redirects 16]
                          #:user-agent [user-agent (current-user-agent)])
+  (define enable-breaks?
+    (break-enabled))
   (define the-data
     (cond
       [(supplied? form) (form-payload form)]
@@ -155,103 +157,119 @@
       [else data]))
 
   (define (go u
-              #:method [method method]
-              #:headers [headers headers]
-              #:params [params params]
-              #:auth [auth auth]
-              #:data [data the-data]
+              #:method [method method] ;; noqa
+              #:headers [headers headers] ;; noqa
+              #:params [params params] ;; noqa
+              #:auth [auth auth] ;; noqa
+              #:data [data the-data] ;; noqa
               #:history [history null]
               #:attempts [attempts-remaining max-attempts]
               #:redirects [redirects-remaining max-redirects])
     (let*-values ([(headers) (hash-set headers 'user-agent user-agent)]
                   [(headers) (maybe-add-cookie-header sess u headers)]
-                  [(headers params) (if auth
-                                        (auth u headers params)
-                                        (values headers params))]
-                  [(headers data) (if (procedure? data)
-                                      (data headers)
-                                      (values headers data))])
-      (define conn (session-lease sess u timeouts))
-      (define resp
-        (with-handlers ([exn:fail?
-                         (lambda (e)
-                           (log-http-easy-warning "request failed: ~a" (exn-message e))
-                           (http-conn-close! conn)
-                           (session-release sess u conn)
-                           (cond
-                             [(exn:fail:http-easy? e)
-                              (log-http-easy-warning "error cannot be retried; bubbling up exception")
-                              (raise e)]
-                             [(positive? attempts-remaining)
-                              (log-http-easy-debug "retrying~n  attempts remaining: ~a" (sub1 attempts-remaining))
-                              (go u #:attempts (sub1 attempts-remaining) #:history history)]
-                             [else
-                              (log-http-easy-warning "out of retries; bubbling up exception")
-                              (raise e)]))])
-          (define resp-ch
-            (make-channel))
-          (define thd
-            (thread
-             (lambda ()
-               (with-handlers ([exn:fail? (λ (e) (channel-put resp-ch e))])
-                 (define-values (resp-status resp-headers resp-output)
-                   (http-conn-sendrecv!
-                    conn (url-path&query u params)
-                    #:close? close?
-                    #:method (method->bytes method)
-                    #:headers (headers->list headers)
-                    #:data (if (input-port? data)
-                               (port->data-procedure data)
-                               data)))
-                 (channel-put
-                  resp-ch
-                  (make-response
-                   resp-status
-                   resp-headers
-                   resp-output
-                   history
-                   (λ (_)
-                     (session-release sess u conn))))))))
-          (sync
-           (handle-evt
-            resp-ch
-            (lambda (r)
-              (when (exn:fail? r)
-                (raise r))
-              (begin0 r
-                (log-http-easy-debug "response: ~.s" (response-status-line r))
-                (maybe-save-cookies! sess u (response-headers r)))))
-           (handle-evt
-            (make-request-timeout-evt timeouts)
-            (lambda (_)
-              (kill-thread thd)
-              (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
-              (raise (make-timeout-error 'request)))))))
+                  [(headers params)
+                   (if auth
+                       (auth u headers params)
+                       (values headers params))]
+                  [(headers data)
+                   (if (procedure? data)
+                       (data headers)
+                       (values headers data))])
+      (parameterize-break #f
+        (define conn (session-lease sess u timeouts))
+        (define resp
+          (with-handlers ([exn:break?
+                           (lambda (e)
+                             (log-http-easy-warning "received break")
+                             (http-conn-close! conn)
+                             (session-release sess u conn)
+                             (raise e))]
+                          [exn:fail?
+                           (lambda (e)
+                             (log-http-easy-warning "request failed: ~a" (exn-message e))
+                             (http-conn-close! conn)
+                             (session-release sess u conn)
+                             (cond
+                               [(exn:fail:http-easy? e)
+                                (log-http-easy-warning "error cannot be retried; bubbling up exception")
+                                (raise e)]
+                               [(positive? attempts-remaining)
+                                (log-http-easy-debug "retrying~n  attempts remaining: ~a" (sub1 attempts-remaining))
+                                (parameterize-break enable-breaks?
+                                  (go u #:attempts (sub1 attempts-remaining) #:history history))]
+                               [else
+                                (log-http-easy-warning "out of retries; bubbling up exception")
+                                (raise e)]))])
+            (define resp-ch
+              (make-channel))
+            (define thd
+              (thread
+               (lambda ()
+                 (with-handlers ([exn:break? void]
+                                 [exn:fail? (λ (e) (channel-put resp-ch e))])
+                   (define-values (resp-status resp-headers resp-output)
+                     (http-conn-sendrecv!
+                      conn (url-path&query u params)
+                      #:close? close?
+                      #:method (method->bytes method)
+                      #:headers (headers->list headers)
+                      #:data (if (input-port? data)
+                                 (port->data-procedure data)
+                                 data)))
+                   (channel-put
+                    resp-ch
+                    (make-response
+                     resp-status
+                     resp-headers
+                     resp-output
+                     history
+                     (lambda (_)
+                       (session-release sess u conn))))))))
+            (with-handlers ([exn:break?
+                             (lambda (e)
+                               (break-thread thd)
+                               (raise e))])
+              (sync/enable-break
+               (handle-evt
+                resp-ch
+                (lambda (r)
+                  (when (exn:fail? r)
+                    (raise r))
+                  (begin0 r
+                    (log-http-easy-debug "response: ~.s" (response-status-line r))
+                    (maybe-save-cookies! sess u (response-headers r)))))
+               (handle-evt
+                (make-request-timeout-evt timeouts)
+                (lambda (_)
+                  (break-thread thd)
+                  (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
+                  (raise (make-timeout-error 'request))))))))
 
-      (cond
-        [(and (positive? redirects-remaining) (redirect? resp))
-         (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
-         (define dest-url (ensure-absolute-url u location))
-         (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location)
-         (response-drain! resp)
-         (response-close! resp)
-         (go dest-url
-             #:method (case (response-status-code resp)
-                        [(301 302 303) 'get]
-                        [(307)         method])
-             #:headers (hash-remove headers 'authorization)
-             #:auth (if (same-origin? dest-url u) auth #f)
-             #:history (cons resp history)
-             #:redirects (sub1 redirects-remaining))]
-
-        [(or close? (not stream?))
-         (begin0 resp
+        (cond
+          [(and (positive? redirects-remaining) (redirect? resp))
+           (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
+           (define dest-url (ensure-absolute-url u location))
+           (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location)
            (response-drain! resp)
-           (response-close! resp))]
+           (response-close! resp)
+           (parameterize-break enable-breaks?
+             (go dest-url
+                 #:method (case (response-status-code resp)
+                            [(301 302 303) 'get]
+                            [(307)         method])
+                 #:headers (hash-remove headers 'authorization)
+                 #:auth (if (same-origin? dest-url u) auth #f)
+                 #:history (cons resp history)
+                 #:redirects (sub1 redirects-remaining)))]
 
-        [else
-         (begin0 resp
-           (will-register executor resp response-close!))])))
+          [(or close? (not stream?))
+           (begin0 resp
+             (response-drain! resp)
+             (response-close! resp))]
+
+          [else
+           (begin0 resp
+             (will-register executor resp response-close!))]))))
 
   (go (->url urlish)))
 

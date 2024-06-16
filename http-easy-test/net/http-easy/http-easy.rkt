@@ -394,7 +394,56 @@
             (define in (response-output r))
             (check-equal? (peek-bytes 5 0 in) #"hello")
             (check-true (port-commit-peeked 5 (port-progress-evt in) always-evt in))
-            (check-equal? (read-bytes 8 in) #", world!")))))))))
+            (check-equal? (read-bytes 8 in) #", world!")))))))
+
+   (test-suite
+    "session"
+
+    (test-suite
+     "breaks"
+
+     (test-case "can break a request"
+       (call-with-web-server
+        (lambda (_req)
+          (sleep 30)
+          (response/output
+           (lambda (out)
+             (displayln "hello, world!" out))))
+        (lambda (addr)
+          (define thd
+            (thread
+             (lambda ()
+               (with-handlers ([exn:break? void])
+                 (get addr)))))
+          (sync (system-idle-evt))
+          (break-thread thd)
+          (sync (system-idle-evt))
+          (check-not-false (sync/timeout 0 thd)))))
+
+     (test-case "breaking is safe"
+       (define sema (make-semaphore))
+       (call-with-web-server
+        (lambda (_req)
+          (response/output
+           (lambda (out)
+             (semaphore-wait sema)
+             (displayln "hello, world!" out))))
+        (lambda (addr)
+          (parameterize ([current-session
+                          (make-session
+                           #:pool-config
+                           (make-pool-config
+                            #:max-size 1))])
+            (define thd
+              (thread
+               (lambda ()
+                 (with-handlers ([exn:break? void])
+                   (get addr)))))
+            (sync (system-idle-evt))
+            (break-thread thd)
+            (semaphore-post sema)
+            (semaphore-post sema)
+            (check-not-false (get addr))))))))))
 
 (module+ test
   (require rackunit/text-ui)
