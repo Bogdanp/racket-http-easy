@@ -11,9 +11,10 @@
                      openssl
                      racket/base
                      racket/class
-                     racket/contract
+                     racket/contract/base
                      racket/format
                      racket/match
+                     racket/promise
                      xml))
 
 @title{@tt{http-easy}: a high-level HTTP client}
@@ -308,7 +309,7 @@ scheme and url-encode the path to the socket as the host.
 }
 
 @defproc[(make-session [#:pool-config pool-config pool-config? (make-pool-config)]
-                       [#:ssl-context ssl-context ssl-client-context? (ssl-secure-client-context)]
+                       [#:ssl-context ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?)) (delay (ssl-secure-client-context))]
                        [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]
                        [#:proxies proxies (listof proxy?) null]) session?]{
   Produces a @racket[session?] value with @racket[#:pool-config] as
@@ -328,7 +329,10 @@ scheme and url-encode the path to the socket as the host.
   The @racket[#:proxies] argument specifies an optional list of
   @tech{proxies} to use when making requests.
 
-  @history[#:changed "0.3" @elem{Added the @racket[#:proxies] argument.}]
+  @history[
+    #:changed "0.6" @elem{The @racket[#:ssl-context] argument accepts promises.}
+    #:changed "0.3" @elem{Added the @racket[#:proxies] argument.}
+  ]
 }
 
 @defproc[(session-close! [s session?]) void?]{

@@ -4,12 +4,12 @@
          net/http-client
          net/uri-codec
          net/url
-         openssl
          racket/class
          racket/contract/base
          racket/format
          racket/lazy-require
          racket/match
+         racket/promise
          "common.rkt"
          "contract.rkt"
          "error.rkt"
@@ -24,6 +24,7 @@
 
 (lazy-require
  [json (jsexpr?)]
+ [openssl (ssl-client-context? ssl-secure-client-context)]
  [racket/unix-socket (unix-socket-connect)])
 
 ;; session ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -32,7 +33,7 @@
  (contract-out
   [make-session (->* []
                      [#:pool-config pool-config?
-                      #:ssl-context (or/c #f ssl-client-context?)
+                      #:ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?))
                       #:cookie-jar (is-a?/c cookie-jar<%>)
                       #:proxies (listof proxy?)]
                      session?)]
@@ -76,7 +77,7 @@
   #:transparent)
 
 (define (make-session #:pool-config [conf (make-pool-config)]
-                      #:ssl-context [ssl-ctx (ssl-secure-client-context)]
+                      #:ssl-context [ssl-ctx (delay (ssl-secure-client-context))]
                       #:cookie-jar [cookies #f]
                       #:proxies [proxies null])
   (define s
@@ -312,28 +313,31 @@
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define ((make-url-connector u ssl-ctx proxies) conn)
-  (begin0 conn
-    (cond
-      [(http-conn-live? conn)
-       (log-http-easy-debug "reusing connection to ~a" (pool-key u))]
+  (let ([ssl-ctx (if (promise? ssl-ctx)
+                     (force ssl-ctx)
+                     ssl-ctx)])
+    (begin0 conn
+      (cond
+        [(http-conn-live? conn)
+         (log-http-easy-debug "reusing connection to ~a" (pool-key u))]
 
-      [else
-       (log-http-easy-debug "connecting to ~a" (pool-key u))
-       (match-define (struct* url ([scheme scheme] [host host] [port port])) u)
-       (case scheme
-         [("http+unix")
-          (define path (form-urlencoded-decode host))
-          (define-values (in out)
-            (unix-socket-connect path))
-          (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
+        [else
+         (log-http-easy-debug "connecting to ~a" (pool-key u))
+         (match-define (struct* url ([scheme scheme] [host host] [port port])) u)
+         (case scheme
+           [("http+unix")
+            (define path (form-urlencoded-decode host))
+            (define-values (in out)
+              (unix-socket-connect path))
+            (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
 
-         [else
-          (or
-           (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
-             ((proxy-connect! p) conn u ssl-ctx))
-           (http-conn-open! conn host
-                            #:port (or port (if (equal? scheme "https") 443 80))
-                            #:ssl? (and (equal? scheme "https") ssl-ctx)))])])))
+           [else
+            (or
+             (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
+               ((proxy-connect! p) conn u ssl-ctx))
+             (http-conn-open! conn host
+                              #:port (or port (if (equal? scheme "https") 443 80))
+                              #:ssl? (and (equal? scheme "https") ssl-ctx)))])]))))
 
 (define (headers->list headers)
   (for/list ([(k v) (in-hash headers)])

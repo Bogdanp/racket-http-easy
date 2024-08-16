@@ -2,9 +2,12 @@
 
 (require net/http-client
          net/url
-         openssl
          racket/contract/base
+         racket/lazy-require
          "url.rkt")
+
+(lazy-require
+ [openssl (ssl-client-context?)])
 
 (provide
  proxy?
