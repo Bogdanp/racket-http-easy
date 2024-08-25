@@ -77,7 +77,7 @@
   #:transparent)
 
 (define (make-session #:pool-config [conf (make-pool-config)]
-                      #:ssl-context [ssl-ctx (delay (ssl-secure-client-context))]
+                      #:ssl-context [ssl-ctx (delay/sync (ssl-secure-client-context))]
                       #:cookie-jar [cookies #f]
                       #:proxies [proxies null])
   (define s
