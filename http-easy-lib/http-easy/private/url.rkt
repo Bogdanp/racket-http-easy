@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require net/url
+(require net/uri-codec
+         net/url
          racket/contract/base
          racket/format
          racket/string)
@@ -24,10 +25,12 @@
 (define (string->url* s)
   (cond
     [(regexp-match? #px"^[^:]+://" s)
-     (define u (string->url s))
-     (struct-copy url u
-                  [scheme (string-trim #:repeat? #t (url-scheme u))]
-                  [host   (string-trim #:repeat? #t (url-host   u))])]
+     (define the-url
+       (parameterize ([current-alist-separator-mode 'amp])
+         (string->url s)))
+     (struct-copy url the-url
+                  [scheme (string-trim #:repeat? #t (url-scheme the-url))]
+                  [host   (string-trim #:repeat? #t (url-host   the-url))])]
 
     [(string-prefix? s "://")
      (string->url* (~a "http" s))]

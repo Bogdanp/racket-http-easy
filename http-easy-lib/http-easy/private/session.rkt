@@ -250,7 +250,7 @@
           [(and (positive? redirects-remaining) (redirect? resp))
            (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
            (define dest-url (ensure-absolute-url u location))
-           (log-http-easy-debug "following ~s redirect to ~.s" (response-status-code resp) location)
+           (log-http-easy-debug "following ~s redirect to ~s" (response-status-code resp) location)
            (response-drain! resp)
            (response-close! resp)
            (parameterize-break enable-breaks?
@@ -276,7 +276,8 @@
 
 (define (ensure-absolute-url orig location)
   (define location-url
-    (string->url location))
+    (parameterize ([current-alist-separator-mode 'amp])
+      (string->url location)))
   (cond
     [(url-host location-url) location-url]
     [else (combine-url/relative orig location)]))
