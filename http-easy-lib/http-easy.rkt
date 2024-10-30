@@ -12,6 +12,7 @@
          "http-easy/private/response.rkt"
          "http-easy/private/session.rkt"
          "http-easy/private/timeout.rkt"
+         "http-easy/private/url.rkt"
          "http-easy/private/user-agent.rkt")
 
 (provide
@@ -34,6 +35,10 @@
  (all-from-out "http-easy/private/response.rkt")
  (all-from-out "http-easy/private/session.rkt")
  (all-from-out "http-easy/private/user-agent.rkt")
+
+ (struct-out url/literal)
+ string->url/literal
+ url/literal->string
 
  (contract-out
   [current-session (parameter/c session?)]))

@@ -13,7 +13,7 @@
    "url"
 
    (test-suite
-    "url-path&query"
+    "url-request-uri"
 
     (test-case "extracts various kinds of paths"
       (define tests
@@ -29,11 +29,11 @@
           ("/a;b/c"                ()          "/a;b/c")
           ("/å/b/c"                ()          "/%C3%A5/b/c")))
 
-      (for* ([pair (in-list tests)]
-             [s (in-value (car pair))]
-             [p (in-value (cadr pair))]
-             [e (in-value (caddr pair))])
-        (check-equal? (url-path&query (string->url* s) p) e))))
+      (for* ([tuple (in-list tests)]
+             [s (in-value (car tuple))]
+             [p (in-value (cadr tuple))]
+             [e (in-value (caddr tuple))])
+        (check-equal? (url-request-uri (string->url* s) p) e))))
 
    (test-suite
     "string->url*"
@@ -54,7 +54,57 @@
       (for* ([pair (in-list tests)]
              [s (in-value (car pair))]
              [e (in-value (cdr pair))])
-        (check-equal? (url->string (string->url* s)) e s))))))
+        (check-equal? (url->string (string->url* s)) e s))))
+
+   (test-suite
+    "url/literal"
+
+    (test-case "roundtrips"
+      (define tests
+        '(("http://example.com" . "http://example.com")
+          ("http://bogdan@example.com:5100" . "http://bogdan@example.com:5100")
+          ("http://example.com/a/b/c" . "http://example.com/a/b/c")
+          ("http://example.com/a%2Bb.mp3" . "http://example.com/a%2Bb.mp3")
+          ("http://example.com/a%2Bb.mp3?c=d+e" . "http://example.com/a%2Bb.mp3?c=d%2Be")
+          ("a/b/c" . "a/b/c")
+          ("/a/b/c" . "/a/b/c")
+          ("/a;b;c" . "/a;b;c")))
+
+      (for* ([pair (in-list tests)]
+             [s (in-value (car pair))]
+             [e (in-value (cdr pair))])
+        (check-equal? (url/literal->string (string->url/literal s)) e s)))
+
+    (test-case "oracle"
+      (define tests
+        '("http://example.com"
+          "http://example.com/"
+          "http://example.com/a/b/c?d=e"
+          "http://example.com/a/b/c?d=e f"
+          "http://example.com/a;b"
+          "http://example.com/a/b c;d"
+          "http://example.com/a/b c;d e"
+          "http://bogdan@example.com"
+          "http://bogdan:secret pass@example.com"
+          "http://bogdan:secret pass@example.com#fragment"
+          "http://bogdan:secret pass@example.com#fragment a"
+          "a/b/c"
+          "/a/b/c"))
+
+      (for ([test (in-list tests)])
+        (check-equal?
+         (url/literal->string (string->url/literal test))
+         (url->string (string->url test))))))
+
+   (test-suite
+    "is-percent-encoded?"
+
+    (check-false (is-percent-encoded? ""))
+    (check-false (is-percent-encoded? "%"))
+    (check-false (is-percent-encoded? "abc"))
+    (check-false (is-percent-encoded? "a=b"))
+    (check-true (is-percent-encoded? "a%2Bb"))
+    (check-false (is-percent-encoded? "a%2Bb%")))))
 
 (module+ test
   (require rackunit/text-ui)

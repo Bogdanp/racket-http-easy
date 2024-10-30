@@ -87,9 +87,9 @@ response returns its underlying connection to the pool:
 @(define sr (secref "guide:streaming"))
 
 If you forget to manually close a response, its underlying connection
-will get returned to the pool when the response gets
-garbage-collected.  Unless you explicitly use @sr, you don't have to
-worry about this much.
+will get returned to the pool when the response gets garbage-collected.
+Unless you explicitly use @|sr|, you don't have to worry about this
+much.
 
 @subsection[#:tag "guide:streaming"]{Streaming Responses}
 
@@ -356,41 +356,42 @@ scheme and url-encode the path to the socket as the host.
                           [#:user-agent user-agent (or/c bytes? string?) (current-user-agent)]) response?]{
 
   Requests @racket[uri] using @racket[s]'s connection pool and
-  associated settings (SSL context, proxy, cookie jar, etc.).
+  associated settings (SSL context, proxy, cookie jar, etc.). The
+  @racket[uri] argument may be a @tech{literal URL}.
 
-  Response values returned by this function must be closed before
-  their underlying connection is returned to the pool.  If the
-  @racket[close?] argument is @racket[#t], this is done
-  automatically.  Ditto if the responses are garbage-collected.
+  Response values returned by this function must be closed before their
+  underlying connection is returned to the pool. If the @racket[close?]
+  argument is @racket[#t], this is done automatically. Ditto if the
+  responses are garbage-collected.
 
   If the @racket[close?] argument is @racket[#t], then the response's
   output port is drained and the connection is closed.
 
   If the @racket[stream?] argument is @racket[#f] (the default), then
   the response's output port is drained and the resulting byte string
-  is stored on the response value.  The drained data is accessible
-  using the @racket[response-body] function.  If the argument is
-  @racket[#t], then the response body is streamed and the data is
-  accessible via the @racket[response-output] function.  This argument
-  has no effect when @racket[close?] is @racket[#t].
+  is stored on the response value. The drained data is accessible using
+  the @racket[response-body] function. If the argument is @racket[#t],
+  then the response body is streamed and the data is accessible via the
+  @racket[response-output] function. This argument has no effect when
+  @racket[close?] is @racket[#t].
 
   The @racket[method] argument specifies the HTTP request method to use.
 
   Query parameters may be specified directly on the @racket[uri]
-  argument or via the @racket[params] argument.  If query parameters
-  are specified via both arguments, then the list of @racket[params]
-  is appended to those already in the @racket[uri].
+  argument or via the @racket[params] argument. If query parameters are
+  specified via both arguments, then the list of @racket[params] is
+  appended to those already in the @racket[uri].
 
   The @racket[auth] argument allows authentication headers and query
-  params to be added to the request.  When following redirects, the
+  params to be added to the request. When following redirects, the
   auth procedure is applied to subsequent requests only if the target
-  URL has the @tech{same origin} as the original request.  Two URLs
-  are considered to have the @deftech{same origin} if their scheme,
-  hostname and port are the same.
+  URL has the @tech{same origin} as the original request. Two URLs are
+  considered to have the @deftech{same origin} if their scheme, hostname
+  and port are the same.
 
-  The @racket[data] argument can be used to send arbitrary request
-  data to the remote end.  A number of @tech{payload procedures}
-  are available for producing data in standard formats:
+  The @racket[data] argument can be used to send arbitrary request data
+  to the remote end. A number of @tech{payload procedures} are available
+  for producing data in standard formats:
 
   @interaction[
   #:eval he-eval
@@ -407,27 +408,47 @@ scheme and url-encode the path to the socket as the host.
   @racket[json-payload] as the @racket[data] argument.
 
   The @racket[data], @racket[form] and @racket[json] arguments are
-  mutually-exclusive.  Supplying more than one at a time causes a
+  mutually-exclusive. Supplying more than one at a time causes a
   contract error to be raised.
 
   The @racket[timeouts] argument controls how long various aspects of
-  the request cycle will be waited on.  When a timeout is exceeded, an
-  @racket[exn:fail:http-easy:timeout?] error is raised.  When
-  redirects are followed, the timeouts are per request.
+  the request cycle will be waited on. When a timeout is exceeded, an
+  @racket[exn:fail:http-easy:timeout?] error is raised. When redirects
+  are followed, the timeouts are per request.
 
-  The @racket[max-attempts] argument controls how many times
-  connection errors are retried.  This meant to handle connection
-  resets and the like and isn't a general retry mechanism.
+  The @racket[max-attempts] argument controls how many times connection
+  errors are retried. This meant to handle connection resets and the
+  like and isn't a general retry mechanism.
 
-  The @racket[max-redirects] argument controls how many redirects are
-  followed by the request.  Redirect cycles are not detected.  To
-  disable redirect following, set this argument to @racket[0].  The
+  The @racket[max-redirects] argument controls how many redirects
+  are followed by the request. Redirect cycles are not detected. To
+  disable redirect following, set this argument to @racket[0]. The
   @tt{Authorization} header is stripped from redirect requests if the
   target URL does not have the @tech{same origin} as the original
   request.
 
   @history[#:changed "0.3" @elem{Added support for the @tt{http+unix}
   scheme to allow requests to UNIX domain sockets.}]
+}
+
+@deftogether[(
+  @defproc[(url/literal? [v any/c]) boolean?]
+  @defproc[(string->url/literal [s string?]) url/literal?]
+  @defproc[(url/literal->string [u url/literal?]) string?]
+)]{
+  A predicate and conversion procedures for a variant of @racket[url?]
+  that does not decode user, path, query and fragment components
+  upon conversion from string. When converting to a string, only
+  the components of the aforementioned fields that are not already
+  percent-encoded are encoded. A component is considered to be percent
+  encoded if all of its percent characters are followed by two
+  hexadecimal characters.
+
+  @deftech{Literal URLs} are used automatically when handling redirects
+  to avoid issues that may pop up when decoding an re-encoding URLs from
+  standards-non-compliant servers.
+
+  @history[#:added "0.7"]
 }
 
 

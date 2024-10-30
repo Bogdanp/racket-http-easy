@@ -16,8 +16,8 @@
 
  (contract-out
   [make-proxy (-> (-> url? boolean?) (-> http-conn? url? (or/c #f ssl-client-context?) void?) proxy?)]
-  [make-http-proxy (->* (urlish/c) ((-> url? boolean?)) proxy?)]
-  [make-https-proxy (->* (urlish/c) ((-> url? boolean?)) proxy?)]))
+  [make-http-proxy (->* [urlish/c] [(-> url? boolean?)] proxy?)]
+  [make-https-proxy (->* [urlish/c] [(-> url? boolean?)] proxy?)]))
 
 (struct proxy (matches? connect!)
   #:transparent)

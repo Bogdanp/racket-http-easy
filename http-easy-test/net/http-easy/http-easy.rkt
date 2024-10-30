@@ -376,7 +376,32 @@
           (check-equal?
            (response-body
             (get (format "http://127.0.0.1:~a" port)))
-           #"hello")))))
+           #"hello"))))
+
+     ;; xref: https://chrt.fm/track/E341G/dts.podtrac.com/redirect.mp3/prfx.byspotify.com/e/rss.art19.com/episodes/f441d319-c90a-4632-bed5-5bd3e596018e.mp3?rss_browser=BAhJIg9Qb2RjYXRjaGVyBjoGRVQ%3D--8c940e38b58f38097352f6f4709902a1b7f12844
+     (test-case "redirect to location with encoded + in path"
+       (call-with-tcp-server
+        (lambda (lines out)
+          (match (car lines)
+            ["GET / HTTP/1.1"
+             (fprintf out "HTTP/1.1 302 Found\r\n")
+             (fprintf out "Location: /a%2Bb.mp3\r\n")
+             (fprintf out "\r\n")]
+            ["GET /a%2Bb.mp3 HTTP/1.1"
+             (fprintf out "HTTP/1.1 200 OK\r\n")
+             (fprintf out "Content-Length: 2\r\n")
+             (fprintf out "\r\n")
+             (fprintf out "ok")]
+            ["GET /a+b.mp3 HTTP/1.1"
+             (fprintf out "HTTP/1.1 400 Bad Request\r\n")
+             (fprintf out "Content-Length: 3\r\n")
+             (fprintf out "\r\n")
+             (fprintf out "err")]))
+        (lambda (port)
+          (parameterize ([current-session (make-session)])
+            (check-equal? (response-body (get (format "http://127.0.0.1:~a" port))) #"ok")
+            ;; https://github.com/Bogdanp/racket-http-easy/issues/25
+            (check-equal? (response-body (get (string->url/literal (format "http://127.0.0.1:~a/a%2Bb.mp3" port)))) #"ok"))))))
 
     (test-suite
      "custom port"

@@ -210,7 +210,7 @@
                                  [exn:fail? (λ (e) (channel-put resp-ch e))])
                    (define-values (resp-status resp-headers resp-output)
                      (http-conn-sendrecv!
-                      conn (url-path&query u params)
+                      conn (url-request-uri u params)
                       #:close? close?
                       #:method (method->bytes method)
                       #:headers (headers->list headers)
@@ -274,21 +274,31 @@
 
   (go (->url urlish)))
 
+;; https://www.rfc-editor.org/rfc/rfc2616#section-14.30
 (define (ensure-absolute-url orig location)
   (define location-url
-    (parameterize ([current-alist-separator-mode 'amp])
-      (string->url location)))
+    (string->url/literal location))
   (cond
-    [(url-host location-url) location-url]
-    [else (combine-url/relative orig location)]))
+    [(url-host location-url)
+     location-url]
+    [(not (url-path-absolute? location-url))
+     (error 'ensure-absolute-url "Location destination is relative")]
+    [else
+     (match-define (url scheme user host port _ _ _ _) orig)
+     (match-define (url _ _ _ _ _ path query fragment) location-url)
+     (url/literal scheme user host port #t path query fragment)]))
 
 (define (same-origin? a b)
-  (and (equal? (url-scheme a)
-               (url-scheme b))
-       (equal? (url-host a)
-               (url-host b))
-       (equal? (url-port a)
-               (url-port b))))
+  (and
+   (equal?
+    (url-scheme a)
+    (url-scheme b))
+   (equal?
+    (url-host a)
+    (url-host b))
+   (equal?
+    (url-port a)
+    (url-port b))))
 
 (define (redirect? resp)
   (and (memv (response-status-code resp) '(301 302 303 307))
