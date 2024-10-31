@@ -15,10 +15,27 @@
 
 (provide
  (contract-out
+  [buffered-payload (-> payload-procedure/c payload-procedure/c)]
   [form-payload (-> form-data/c payload-procedure/c)]
   [gzip-payload (-> payload-procedure/c payload-procedure/c)]
   [json-payload (-> jsexpr? payload-procedure/c)]
   [pure-payload (-> (or/c bytes? string? input-port?) payload-procedure/c)]))
+
+(define ((buffered-payload p) hs)
+  (let*-values ([(hs data) (p hs)]
+                [(bs)
+                 (cond
+                   [(input-port? data)
+                    (call-with-output-bytes
+                     (lambda (out)
+                       (copy-port data out)))]
+                   [(string? data)
+                    (string->bytes/utf-8 data)]
+                   [else
+                    data])])
+    (define content-length
+      (number->string (bytes-length bs)))
+    (values (hash-set hs 'content-length content-length) bs)))
 
 (define (form-payload v)
   (define data (alist->form-urlencoded v))

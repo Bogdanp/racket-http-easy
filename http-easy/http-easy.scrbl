@@ -675,6 +675,14 @@ sent to a remote server.
   value to be used as the request body.
 }
 
+@defproc[(buffered-payload [p payload-procedure/c]) payload-procedure/c]{
+  Produces a payload procedure that buffers the output of @racket[p]
+  in memory in order to determine its length before sending it to the
+  server.
+
+  @history[#:added "0.8"]
+}
+
 @defproc[(form-payload [v form-data/c]) payload-procedure/c]{
   Produces a payload procedure that encodes @racket[v] as form data
   using the @tt{application/x-www-form-urlencoded} content type.
