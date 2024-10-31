@@ -66,6 +66,7 @@
           ("http://example.com/a/b/c" . "http://example.com/a/b/c")
           ("http://example.com/a%2Bb.mp3" . "http://example.com/a%2Bb.mp3")
           ("http://example.com/a%2Bb.mp3?c=d+e" . "http://example.com/a%2Bb.mp3?c=d%2Be")
+          ("http://example.com/a%2Bb.mp3?c=d+e&f&g=h" . "http://example.com/a%2Bb.mp3?c=d%2Be&f&g=h")
           ("a/b/c" . "a/b/c")
           ("/a/b/c" . "/a/b/c")
           ("/a;b;c" . "/a;b;c")))

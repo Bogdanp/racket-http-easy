@@ -108,7 +108,9 @@
         (loop (cdr path-components)))))
   (unless (null? query)
     (write-char #\? out)
-    (for ([pair (in-list query)])
+    (for ([(pair idx) (in-indexed (in-list query))])
+      (unless (zero? idx)
+        (write-char #\& out))
       (match-define (cons (app symbol->string name) value) pair)
       (write-string (maybe-percent-encode name form-urlencoded-encode) out)
       (when value
