@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/contract/base
+(require net/uri-codec
+         racket/contract/base
          racket/format
          racket/lazy-require
          racket/match
@@ -10,8 +11,7 @@
 (lazy-require
  [file/gzip (gzip-through-ports)]
  [file/md5 (md5)]
- [json (jsexpr? jsexpr->bytes)]
- [net/uri-codec (alist->form-urlencoded)])
+ [json (jsexpr? jsexpr->bytes)])
 
 (provide
  (contract-out
@@ -53,11 +53,11 @@
 (provide
  (contract-out
   [part? (-> any/c boolean?)]
-  [field-part (->* (stringy/c (or/c stringy/c input-port?)) (stringy/c) part:field?)]
-  [file-part (->* (stringy/c input-port?) (stringy/c stringy/c) part:file?)]
+  [field-part (->* [stringy/c (or/c stringy/c input-port?)] [stringy/c] part:field?)]
+  [file-part (->* [stringy/c input-port?] [stringy/c stringy/c] part:file?)]
   [multipart-payload
-   (->* ()
-        (#:boundary (or/c bytes? string?))
+   (->* []
+        [#:boundary (or/c bytes? string?)]
         #:rest (non-empty-listof part?)
         payload-procedure/c)]))
 
