@@ -122,12 +122,14 @@
   (get-output-string out))
 
 (define (maybe-percent-encode s [encode uri-encode])
-  (if (is-percent-encoded? s) s (encode s)))
+  (if (is-percent-encoded? s encode) s (encode s)))
 
-(define (is-percent-encoded? s)
+(define (is-percent-encoded? s [encode uri-encode])
   (define num-%-matches (length (regexp-match* #rx"%" s)))
-  (and (> num-%-matches 0)
-       (= num-%-matches (length (regexp-match* #px"%[a-fA-F0-9]{2}" s)))))
+  (or (and (> num-%-matches 0)
+           (= num-%-matches (length (regexp-match* #px"%[a-fA-F0-9]{2}" s))))
+      (and (eq? encode form-urlencoded-encode)
+           (regexp-match? #rx"[+]" s))))
 
 (define (ipv6-host? s)
   (regexp-match? #rx"^[0-9a-fA-F:]*:[0-9a-fA-F:]*$" s))
