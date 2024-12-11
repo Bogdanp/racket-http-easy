@@ -18,10 +18,10 @@
   (hash/c symbol? (or/c bytes? string?)))
 
 (define form-data/c
-  (listof (cons/c symbol? (or/c false/c string?))))
+  (listof (cons/c symbol? (or/c #f string?))))
 
 (define query-params/c
-  (listof (cons/c symbol? (or/c false/c string?))))
+  (listof (cons/c symbol? (or/c #f string?))))
 
 (define auth-procedure/c
   (-> url? headers/c query-params/c (values headers/c query-params/c)))

@@ -17,7 +17,7 @@
   [make-request-timeout-evt (-> timeout-config? evt?)]))
 
 (define timeout/c
-  (or/c false/c (and/c real? positive?)))
+  (or/c #f (and/c real? positive?)))
 
 (struct timeout-config (lease connect request)
   #:transparent)
