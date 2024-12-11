@@ -259,7 +259,7 @@
                             [(301 302 303) 'get]
                             [(307)         method])
                  #:headers (hash-remove headers 'authorization)
-                 #:auth (if (same-origin? dest-url u) auth #f)
+                 #:auth (and (same-origin? dest-url u) auth)
                  #:history (cons resp history)
                  #:redirects (sub1 redirects-remaining)))]
 
