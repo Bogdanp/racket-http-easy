@@ -55,11 +55,8 @@
     (lambda (in out)
       (gzip-through-ports in out #f (current-seconds))))))
 
-(define (json-payload v)
-  (lambda (hs)
-    (values
-     (hash-set hs 'content-type #"application/json; charset=utf-8")
-     (jsexpr->bytes v))))
+(define ((json-payload v) hs)
+  (values (hash-set hs 'content-type #"application/json; charset=utf-8") (jsexpr->bytes v)))
 
 (define ((pure-payload v) hs)
   (values hs v))
