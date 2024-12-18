@@ -1,8 +1,8 @@
 #lang racket/base
 
-(require (prefix-in d: data/pool)
-         net/http-client
+(require net/http-client
          racket/contract/base
+         (prefix-in d: data/pool)
          "error.rkt"
          "logger.rkt"
          "timeout.rkt")
