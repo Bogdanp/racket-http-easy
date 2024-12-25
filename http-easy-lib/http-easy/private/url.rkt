@@ -126,7 +126,7 @@
 
 (define (is-percent-encoded? s [encode uri-encode])
   (define num-%-matches (length (regexp-match* #rx"%" s)))
-  (or (and (> num-%-matches 0)
+  (or (and (positive? num-%-matches)
            (= num-%-matches (length (regexp-match* #px"%[a-fA-F0-9]{2}" s))))
       (and (eq? encode form-urlencoded-encode)
            (regexp-match? #rx"[+]" s))))
