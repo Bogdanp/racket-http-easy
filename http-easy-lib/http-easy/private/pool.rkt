@@ -14,9 +14,9 @@
  pool-config?
  (contract-out
   [make-pool-config
-   (->* ()
-        (#:max-size limit/c
-         #:idle-timeout timeout/c)
+   (->* []
+        [#:max-size limit/c
+         #:idle-timeout timeout/c]
         pool-config?)]))
 
 (struct pool-config (max-size idle-timeout)
@@ -38,7 +38,7 @@
  (contract-out
   [make-pool (-> pool-config? connector/c pool?)]
   [pool? (-> any/c boolean?)]
-  [pool-lease (->* (pool?) ((or/c #f timeout-config?)) http-conn?)]
+  [pool-lease (->* [pool?] [(or/c #f timeout-config?)] http-conn?)]
   [pool-release (-> pool? http-conn? void?)]
   [pool-close! (-> pool? void?)]))
 
@@ -68,9 +68,8 @@
           (define thd
             (thread
              (lambda ()
-               (with-handlers ([exn:fail?
-                                (lambda (e)
-                                  (channel-put out e))])
+               (with-handlers ([exn:break? void]
+                               [exn:fail? (λ (e) (channel-put out e))])
                  (channel-put out ((pool-connector p) leased-c))))))
           (define res
             (sync/timeout (and t (timeout-config-connect t)) out))
@@ -84,7 +83,7 @@
 
             [(not res)
              (log-http-easy-warning "connection timed out")
-             (kill-thread thd)
+             (break-thread thd)
              (http-conn-close! leased-c)
              (d:pool-release! impl leased-c)
              (raise (make-timeout-error 'connect))]
