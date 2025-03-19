@@ -67,6 +67,8 @@
           ("http://example.com/a%2Bb.mp3" . "http://example.com/a%2Bb.mp3")
           ("http://example.com/a%2Bb.mp3?c=d+e" . "http://example.com/a%2Bb.mp3?c=d+e")
           ("http://example.com/a%2Bb.mp3?c=d+e&f&g=h" . "http://example.com/a%2Bb.mp3?c=d+e&f&g=h")
+          ("https://yleawsaudioipv4.akamaized.net/download/world/78-e0812afa331548619c40a31f60a2d6c3/audio-1742305456621.mp3/filename/Nyhetspodden-Alla-vill-ha-Gronland--men-vad-vill-gronlanningarna-sjalva-2025-03-19.mp3?hdnts=exp=1742456407~acl=/download/world/78-e0812afa331548619c40a31f60a2d6c3/audio-1742305456621.mp3/filename/Nyhetspodden-Alla-vill-ha-Gronland--men-vad-vill-gronlanningarna-sjalva-2025-03-19.mp3~hmac=4cf1fae52a5f2aea1a12f2d677c364668a893b311a4ed761d9d7c259b229841a"
+           . "https://yleawsaudioipv4.akamaized.net/download/world/78-e0812afa331548619c40a31f60a2d6c3/audio-1742305456621.mp3/filename/Nyhetspodden-Alla-vill-ha-Gronland--men-vad-vill-gronlanningarna-sjalva-2025-03-19.mp3?hdnts=exp=1742456407~acl=/download/world/78-e0812afa331548619c40a31f60a2d6c3/audio-1742305456621.mp3/filename/Nyhetspodden-Alla-vill-ha-Gronland--men-vad-vill-gronlanningarna-sjalva-2025-03-19.mp3~hmac=4cf1fae52a5f2aea1a12f2d677c364668a893b311a4ed761d9d7c259b229841a")
           ("a/b/c" . "a/b/c")
           ("/a/b/c" . "/a/b/c")
           ("/a;b;c" . "/a;b;c")))

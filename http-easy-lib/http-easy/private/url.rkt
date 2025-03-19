@@ -56,7 +56,10 @@
                         [(list name value)
                          (cons (string->symbol name) value)]
                         [(list name)
-                         (cons (string->symbol name) #f)]))
+                         (cons (string->symbol name) #f)]
+                        [(list name value ...) ;; noqa
+                         (cons (string->symbol name)
+                               (string-join value "="))]))
                     null)])
     (url/literal scheme user host port abs? path query fragment)))
 
@@ -129,7 +132,7 @@
   (or (and (> num-%-matches 0)
            (= num-%-matches (length (regexp-match* #px"%[a-fA-F0-9]{2}" s))))
       (and (eq? encode form-urlencoded-encode)
-           (regexp-match? #rx"[+]" s))))
+           (regexp-match? #rx"[+=]" s))))
 
 (define (ipv6-host? s)
   (regexp-match? #rx"^[0-9a-fA-F:]*:[0-9a-fA-F:]*$" s))
