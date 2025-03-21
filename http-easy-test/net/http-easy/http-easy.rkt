@@ -425,6 +425,15 @@
     "session"
 
     (test-suite
+     "create"
+
+     (test-case "cookie jar can be #f"
+       (check-true (session? (make-session #:cookie-jar #f))))
+
+     (test-case "cookie jar cannot be a symbol"
+       (check-exn exn:fail:contract? (lambda () (make-session #:cookie-jar 'oops)))))
+
+    (test-suite
      "breaks"
 
      (test-case "can break a request"

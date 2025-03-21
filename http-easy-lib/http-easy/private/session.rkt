@@ -34,7 +34,7 @@
   [make-session (->* []
                      [#:pool-config pool-config?
                       #:ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?))
-                      #:cookie-jar (is-a?/c cookie-jar<%>)
+                      #:cookie-jar (or/c #f (is-a?/c cookie-jar<%>))
                       #:proxies (listof proxy?)]
                      session?)]
   [session? (-> any/c boolean?)]
