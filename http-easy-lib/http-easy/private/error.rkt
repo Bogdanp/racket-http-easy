@@ -14,4 +14,6 @@
 (struct exn:fail:http-easy:timeout exn:fail:http-easy (kind))
 
 (define (make-timeout-error kind)
-  (exn:fail:http-easy:timeout "timed out" (current-continuation-marks) kind))
+  (exn:fail:http-easy:timeout
+   (format "~a timed out" kind)
+   (current-continuation-marks) kind))
