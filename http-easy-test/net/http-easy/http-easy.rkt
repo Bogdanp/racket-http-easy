@@ -6,6 +6,8 @@
          net/url
          racket/class
          racket/match
+         racket/port
+         racket/system
          rackunit
          web-server/dispatch
          (only-in web-server/http
@@ -420,6 +422,41 @@
             (check-equal? (peek-bytes 5 0 in) #"hello")
             (check-true (port-commit-peeked 5 (port-progress-evt in) always-evt in))
             (check-equal? (read-bytes 8 in) #", world!")))))))
+
+   ;; This is similar to a test I wrote for http-client in the
+   ;; net-test pkg and depends on its rst-server.
+   (when (memq (system-type 'os) '(unix macosx))
+     (test-case "handles RST"
+       (match-define (list stdout stdin _pid stderr control)
+         (parameterize ([subprocess-group-enabled #t])
+           (process* (find-system-path 'exec-file) "-l" "tests/net/http-client/rst-server" "full")))
+       (dynamic-wind
+         void
+         (lambda ()
+           (match (read-line stdout)
+             [(regexp #rx"PORT: (.+)" (list _ (app string->number port)))
+              (define stderr-thd (thread (lambda () (copy-port stderr (current-error-port)))))
+              (define stdout-thd (thread (lambda () (copy-port stdout (current-output-port)))))
+              (check-exn
+               #rx"Connection reset by peer"
+               (lambda ()
+                 (get (format "http://127.0.0.1:~a" port))))
+              (kill-thread stderr-thd)
+              (kill-thread stdout-thd)]
+             [(? eof-object?)
+              (define err
+                (let ([out (open-output-string)])
+                  (copy-port stderr out)
+                  (get-output-string out)))
+              ;; The server is not available on older versions of
+              ;; Racket, so deal with that possibility.
+              (unless (regexp-match? #rx"open-input-file: cannot open module file" err)
+                (fail-check err))]))
+         (lambda ()
+           (control 'interrupt)
+           (close-output-port stdin)
+           (close-input-port stdout)
+           (close-input-port stderr)))))
 
    (test-suite
     "session"
