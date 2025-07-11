@@ -220,25 +220,41 @@
         (lambda (addr)
           (check-equal? (response-body (post addr)) #"hello"))))
 
-     (test-case "307 redirects preserve the request method"
+     (test-case "30[78] redirects preserve the request method"
        (define-values (dispatch _)
          (dispatch-rules
-          [("")
+          [("307")
            #:method "post"
            (lambda (_)
              (redirect-to "/a" temporarily/same-method))]
+
+          [("308")
+           #:method "delete"
+           (lambda (_)
+             (response/output
+              #:code 308
+              #:headers (list (make-header #"Location" #"/b"))
+              void))]
 
           [("a")
            #:method "post"
            (lambda (_)
              (response/output
               (lambda (out)
-                (display "hello" out))))]))
+                (display "hello" out))))]
+
+          [("b")
+           #:method "delete"
+           (lambda (_)
+             (response/output
+              (lambda (out)
+                (display "goodbye" out))))]))
 
        (call-with-web-server
         dispatch
         (lambda (addr)
-          (check-equal? (response-body (post addr)) #"hello"))))
+          (check-equal? (response-body (post (format "~a/307" addr))) #"hello")
+          (check-equal? (response-body (delete (format "~a/308" addr))) #"goodbye"))))
 
      (test-case "redirects to other origins discard auth"
        (call-with-web-server

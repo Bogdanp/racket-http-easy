@@ -257,7 +257,7 @@
              (go dest-url
                  #:method (case (response-status-code resp)
                             [(301 302 303) 'get]
-                            [(307)         method])
+                            [(307 308)     method])
                  #:headers (hash-remove headers 'authorization)
                  #:auth (and (same-origin? dest-url u) auth)
                  #:history (cons resp history)
@@ -301,7 +301,7 @@
     (url-port b))))
 
 (define (redirect? resp)
-  (and (memv (response-status-code resp) '(301 302 303 307))
+  (and (memv (response-status-code resp) '(301 302 303 307 308))
        (response-headers-ref resp 'location)
        #t))
 
