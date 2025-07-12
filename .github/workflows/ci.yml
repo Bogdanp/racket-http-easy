@@ -7,6 +7,9 @@ jobs:
       matrix:
         racket-version: ['8.6', '8.7', 'current']
         racket-variant: ['BC', 'CS']
+        exclude:
+          - racket-version: current
+            racket-variant: BC
     name: Build & Test on Racket ${{ matrix.racket-version }} (${{ matrix.racket-variant }})
     steps:
       - uses: actions/checkout@master
