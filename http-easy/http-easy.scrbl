@@ -568,8 +568,15 @@ scheme and url-encode the path to the socket as the host.
   Equivalent to @racket[(read-xml/document (response-output r))].
 }
 
-@defproc[(response-drain! [r response?]) void?]{
-  Drains @racket[r]'s output port.
+@defproc[(response-drain! [r response?]
+                          [t (or/c #f (and/c real? (not/c negative?))) #f]) void?]{
+  Drains @racket[r]'s output port. When @racket[t] is provided, a
+  timeout error is raised if draining the response takes more than
+  @racket[t] seconds.
+
+  @history[
+   #:changed "0.9" @elem{Added the @racket[#t] argument.}
+  ]
 }
 
 @defproc[(response-close! [r response?]) void?]{

@@ -224,7 +224,9 @@
                      resp-output
                      history
                      (lambda (_)
-                       (session-release sess u conn))))))))
+                       (session-release sess u conn))
+                     (lambda (_)
+                       (http-conn-close! conn))))))))
             (with-handlers ([exn:break?
                              (lambda (e)
                                (break-thread thd)
@@ -245,12 +247,15 @@
                   (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
                   (raise (make-timeout-error 'request))))))))
 
+        ;; Register executor early in case the calls to response-drain!
+        ;; raise an exception. Closing the response twice is a no-op.
+        (will-register executor resp response-close!)
         (cond
           [(and (positive? redirects-remaining) (redirect? resp))
            (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
            (define dest-url (ensure-absolute-url u location))
            (log-http-easy-debug "following ~s redirect to ~s" (response-status-code resp) location)
-           (response-drain! resp)
+           (response-drain! resp (timeout-config-request timeouts))
            (response-close! resp)
            (parameterize-break enable-breaks?
              (go dest-url
@@ -263,13 +268,12 @@
                  #:redirects (sub1 redirects-remaining)))]
 
           [(or close? (not stream?))
-           (begin0 resp
-             (response-drain! resp)
-             (response-close! resp))]
+           (response-drain! resp (timeout-config-request timeouts))
+           (response-close! resp)
+           resp]
 
           [else
-           (begin0 resp
-             (will-register executor resp response-close!))]))))
+           resp]))))
 
   (go (->url urlish)))
 
