@@ -6,5 +6,5 @@
 (define deps
   '(["base" #:version "8.1.0.4"]
     "net-cookies-lib"
-    ["resource-pool-lib" #:version "0.2.1"]
+    ["resource-pool-lib" #:version "0.4"]
     "unix-socket-lib"))
