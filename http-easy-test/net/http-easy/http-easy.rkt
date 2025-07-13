@@ -9,6 +9,7 @@
          racket/port
          racket/system
          rackunit
+         version/utils
          web-server/dispatch
          (only-in web-server/http
                   binding-id
@@ -421,25 +422,26 @@
             ;; https://github.com/Bogdanp/racket-http-easy/issues/25
             (check-equal? (response-body (get (string->url/literal (format "http://127.0.0.1:~a/a%2Bb.mp3" port)))) #"ok")))))
 
-     (test-case "response-close! on a server that won't respond in time"
-       (define sema (make-semaphore))
-       (call-with-tcp-server
-        (lambda (_lines out)
-          (fprintf out "HTTP/1.1 200 OK\r\n")
-          (fprintf out "Content-Length: 1000\r\n")
-          (fprintf out "\r\n")
-          (flush-output out)
-          (semaphore-wait sema))
-        (lambda (port)
-          (parameterize ([current-session (make-session)])
-            (define resp (get #:stream? #t (format "http://127.0.0.1:~a" port)))
-            (check-exn
-             #rx"input port is closed"
-             (lambda ()
-               (response-close! resp)))
-            (semaphore-post sema)
-            (sync (system-idle-evt))
-            (session-close! (current-session)))))))
+     (when (version<=? "8.17.0.6" (version))
+       (test-case "response-close! on a server that won't respond in time"
+         (define sema (make-semaphore))
+         (call-with-tcp-server
+          (lambda (_lines out)
+            (fprintf out "HTTP/1.1 200 OK\r\n")
+            (fprintf out "Content-Length: 1000\r\n")
+            (fprintf out "\r\n")
+            (flush-output out)
+            (semaphore-wait sema))
+          (lambda (port)
+            (parameterize ([current-session (make-session)])
+              (define resp (get #:stream? #t (format "http://127.0.0.1:~a" port)))
+              (check-exn
+               #rx"input port is closed"
+               (lambda ()
+                 (response-close! resp)))
+              (semaphore-post sema)
+              (sync (system-idle-evt))
+              (session-close! (current-session))))))))
 
     (test-suite
      "custom port"
