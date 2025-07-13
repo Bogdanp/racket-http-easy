@@ -40,6 +40,7 @@
   [pool? (-> any/c boolean?)]
   [pool-lease (->* [pool?] [(or/c #f timeout-config?)] http-conn?)]
   [pool-release (-> pool? http-conn? void?)]
+  [pool-abandon (-> pool? http-conn? void?)]
   [pool-close! (-> pool? void?)]))
 
 (define connector/c
@@ -96,6 +97,9 @@
 
 (define (pool-release p c)
   (d:pool-release! (pool-impl p) c))
+
+(define (pool-abandon p c)
+  (d:pool-abandon! (pool-impl p) c))
 
 (define (pool-close! p)
   (d:pool-close! (pool-impl p))

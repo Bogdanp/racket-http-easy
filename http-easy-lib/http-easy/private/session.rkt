@@ -120,15 +120,21 @@
              (make-pool (session-conf s) connector))))))
     (pool-lease p timeouts)))
 
-(define (session-release s url c)
+(define (get-session-pool s url)
   (define k (pool-key url))
-  (define p
-    (call-with-semaphore (session-sema s)
-      (lambda ()
-        (hash-ref (session-pools s) k #f))))
-  (when p
-    (log-http-easy-debug "releasing connection to pool ~a" k)
-    (pool-release p c)))
+  (call-with-semaphore (session-sema s)
+    (lambda ()
+      (hash-ref (session-pools s) k #f))))
+
+(define (session-release s url c)
+  (define p (get-session-pool s url))
+  (log-http-easy-debug "releasing connection to pool ~s" (eq-hash-code p))
+  (pool-release p c))
+
+(define (session-abandon s url c)
+  (define p (get-session-pool s url))
+  (log-http-easy-debug "abandoning connection of pool ~s" (eq-hash-code p))
+  (pool-abandon p c))
 
 (define supplied?
   (compose1 not unsupplied-arg?))
@@ -176,19 +182,18 @@
                        (data headers)
                        (values headers data))])
       (parameterize-break #f
-        (define conn (session-lease sess u timeouts))
+        (define conn
+          (session-lease sess u timeouts))
         (define resp
           (with-handlers ([exn:break?
                            (lambda (e)
-                             (log-http-easy-warning "received break")
-                             (http-conn-close! conn)
-                             (session-release sess u conn)
+                             (log-http-easy-warning "received break during request processing; abandoning connection")
+                             (session-abandon sess u conn)
                              (raise e))]
                           [exn:fail?
                            (lambda (e)
                              (log-http-easy-warning "request failed: ~a" (exn-message e))
-                             (http-conn-close! conn)
-                             (session-release sess u conn)
+                             (session-abandon sess u conn)
                              (cond
                                [(exn:fail:http-easy? e)
                                 (log-http-easy-warning "error cannot be retried; bubbling up exception")
@@ -202,7 +207,7 @@
                                 (raise e)]))])
             (define resp-ch
               (make-channel))
-            (define thd
+            (define resp-thd
               (thread
                (lambda ()
                  (with-handlers ([exn:break? void]
@@ -223,57 +228,67 @@
                      resp-headers
                      resp-output
                      history
-                     (lambda (_)
-                       (session-release sess u conn))
-                     (lambda (_)
-                       (http-conn-close! conn))))))))
+                     (λ (_) (session-release sess u conn))
+                     (λ (_) (session-abandon sess u conn))))))))
             (with-handlers ([exn:break?
                              (lambda (e)
-                               (break-thread thd)
+                               (break-thread resp-thd)
                                (raise e))])
               (sync/enable-break
                (handle-evt
                 resp-ch
-                (lambda (r)
-                  (when (exn:fail? r)
-                    (raise r))
-                  (begin0 r
-                    (log-http-easy-debug "response: ~.s" (response-status-line r))
-                    (maybe-save-cookies! sess u (response-headers r)))))
+                (lambda (resp) ;; noqa
+                  (when (exn:fail? resp)
+                    (raise resp))
+                  (log-http-easy-debug "response: ~.s" (response-status-line resp))
+                  (maybe-save-cookies! sess u (response-headers resp))
+                  resp))
                (handle-evt
                 (make-request-timeout-evt timeouts)
                 (lambda (_)
-                  (break-thread thd)
+                  (break-thread resp-thd)
                   (log-http-easy-warning "request timed out~n  method: ~s~n  url: ~.s" method urlish)
                   (raise (make-timeout-error 'request))))))))
-
-        ;; Register executor early in case the calls to response-drain!
-        ;; raise an exception. Closing the response twice is a no-op.
-        (will-register executor resp response-close!)
-        (cond
-          [(and (positive? redirects-remaining) (redirect? resp))
-           (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
-           (define dest-url (ensure-absolute-url u location))
-           (log-http-easy-debug "following ~s redirect to ~s" (response-status-code resp) location)
-           (response-drain! resp (timeout-config-request timeouts))
-           (response-close! resp)
-           (parameterize-break enable-breaks?
-             (go dest-url
-                 #:method (case (response-status-code resp)
-                            [(301 302 303) 'get]
-                            [(307 308)     method])
-                 #:headers (hash-remove headers 'authorization)
-                 #:auth (and (same-origin? dest-url u) auth)
-                 #:history (cons resp history)
-                 #:redirects (sub1 redirects-remaining)))]
-
-          [(or close? (not stream?))
-           (response-drain! resp (timeout-config-request timeouts))
-           (response-close! resp)
-           resp]
-
-          [else
-           resp]))))
+        ;; When an error occurs at this point, a response-close! may already be in progress, so
+        ;; check that the response hasn't been closed already before abandoning the connection.
+        (with-handlers ([exn:break?
+                         (lambda (e)
+                           (log-http-easy-warning "received break during response processing")
+                           (unless (response-closed? resp)
+                             (log-http-easy-warning "abandoning connection")
+                             (session-abandon sess u conn))
+                           (raise e))]
+                        [exn:fail?
+                         (lambda (e)
+                           (log-http-easy-warning "response processing failed")
+                           (unless (response-closed? resp)
+                             (session-abandon sess u conn))
+                           (raise e))])
+          (cond
+            [(and (positive? redirects-remaining) (redirect? resp))
+             (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
+             (define dest-url (ensure-absolute-url u location))
+             (log-http-easy-debug "following ~s redirect to ~s" (response-status-code resp) location)
+             (response-drain! resp (timeout-config-request timeouts))
+             (response-close! resp)
+             (parameterize-break enable-breaks?
+               (go dest-url
+                   #:method (case (response-status-code resp)
+                              [(301 302 303) 'get]
+                              [(307 308)     method])
+                   #:headers (hash-remove headers 'authorization)
+                   #:auth (and (same-origin? dest-url u) auth)
+                   #:history (cons resp history)
+                   #:redirects (sub1 redirects-remaining)))]
+            [(or close? (not stream?))
+             (response-drain! resp (timeout-config-request timeouts))
+             (response-close! resp)
+             resp]
+            [else
+             ;; No more exceptions to handle at this point, so it is safe to register a will
+             ;; executor for the response and return it.
+             (will-register executor resp response-close!)
+             resp])))))
 
   (go (->url urlish)))
 

@@ -13,8 +13,8 @@
          #:body [body (open-input-bytes #"")]
          #:history [history null]
          #:closer [closer void]
-         #:destroyer [destroyer void])
-  (make-response status headers body history closer destroyer))
+         #:abandoner [abandoner void])
+  (make-response status headers body history closer abandoner))
 
 (define response-tests
   (test-suite

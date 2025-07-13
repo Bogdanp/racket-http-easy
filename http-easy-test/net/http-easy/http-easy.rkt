@@ -419,7 +419,27 @@
           (parameterize ([current-session (make-session)])
             (check-equal? (response-body (get (format "http://127.0.0.1:~a" port))) #"ok")
             ;; https://github.com/Bogdanp/racket-http-easy/issues/25
-            (check-equal? (response-body (get (string->url/literal (format "http://127.0.0.1:~a/a%2Bb.mp3" port)))) #"ok"))))))
+            (check-equal? (response-body (get (string->url/literal (format "http://127.0.0.1:~a/a%2Bb.mp3" port)))) #"ok")))))
+
+     (test-case "response-close! on a server that won't respond in time"
+       (define sema (make-semaphore))
+       (call-with-tcp-server
+        (lambda (_lines out)
+          (fprintf out "HTTP/1.1 200 OK\r\n")
+          (fprintf out "Content-Length: 1000\r\n")
+          (fprintf out "\r\n")
+          (flush-output out)
+          (semaphore-wait sema))
+        (lambda (port)
+          (parameterize ([current-session (make-session)])
+            (define resp (get #:stream? #t (format "http://127.0.0.1:~a" port)))
+            (check-exn
+             #rx"input port is closed"
+             (lambda ()
+               (response-close! resp)))
+            (semaphore-post sema)
+            (sync (system-idle-evt))
+            (session-close! (current-session)))))))
 
     (test-suite
      "custom port"
@@ -510,28 +530,33 @@
 
      (test-case "breaking is safe"
        (define sema (make-semaphore))
-       (call-with-web-server
-        (lambda (_req)
-          (response/output
-           (lambda (out)
-             (semaphore-wait sema)
-             (displayln "hello, world!" out))))
-        (lambda (addr)
-          (parameterize ([current-session
-                          (make-session
-                           #:pool-config
-                           (make-pool-config
-                            #:max-size 1))])
-            (define thd
-              (thread
-               (lambda ()
-                 (with-handlers ([exn:break? void])
-                   (get addr)))))
-            (sync (system-idle-evt))
-            (break-thread thd)
-            (semaphore-post sema)
-            (semaphore-post sema)
-            (check-not-false (get addr))))))))))
+       (for ([_ (in-range 10)])
+         (call-with-web-server
+          (lambda (_req)
+            (response/output
+             (lambda (out)
+               (semaphore-wait sema)
+               (displayln "hello, world!" out))))
+          (lambda (addr)
+            (parameterize ([current-session
+                            (make-session
+                             #:pool-config
+                             (make-pool-config
+                              #:max-size 1))])
+              (define broken?-sema
+                (make-semaphore))
+              (define thd
+                (thread
+                 (lambda ()
+                   (with-handlers ([exn:break? void])
+                     (get addr))
+                   (semaphore-post broken?-sema))))
+              (sync (system-idle-evt))
+              (break-thread thd)
+              (semaphore-post sema)
+              (semaphore-post sema)
+              (semaphore-wait broken?-sema)
+              (check-not-false (get addr)))))))))))
 
 (module+ test
   (require rackunit/text-ui)

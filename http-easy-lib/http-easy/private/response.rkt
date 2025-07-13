@@ -34,7 +34,7 @@
  response-output
  response-history
  (contract-out
-  [make-response (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response-destroyer/c response?)]
+  [make-response (-> bytes? (listof bytes?) input-port? (listof response?) response-closer/c response-abandoner/c response?)]
   [response-body (-> response? bytes?)]
   [response-json (-> response? (or/c eof-object? jsexpr?))]
   [response-xexpr (-> response? xexpr?)]
@@ -44,7 +44,8 @@
   [read-response-xexpr (-> response? xexpr?)]
   [read-response-xml (-> response? document?)]
   [response-drain! (->* [response?] [(or/c #f (and/c real? (not/c negative?)))] void?)]
-  [response-close! (-> response? void?)]))
+  [response-close! (-> response? void?)]
+  [response-closed? (-> response? boolean?)]))
 
 (struct response
   (status-line
@@ -57,18 +58,18 @@
    history
    closer
    [closed? #:mutable]
-   destroyer))
+   abandoner))
 
 (define response-closer/c
   (-> response? void?))
 
-(define response-destroyer/c
+(define response-abandoner/c
   (-> response? void?))
 
 (define status-code/c
   (integer-in 100 999))
 
-(define (make-response status headers output history closer destroyer)
+(define (make-response status headers output history closer abandoner)
   (match status
     [(regexp #rx#"^HTTP/(...) ([1-9][0-9][0-9])(?: (.*))?$"
              (list status-line
@@ -89,7 +90,7 @@
         #;history history
         #;close closer
         #;closed? #f
-        #;destroyer destroyer))
+        #;abandoner abandoner))
      (retain resp)
      resp]
     [_
@@ -142,17 +143,17 @@
 (define (response-drain! r [t #f])
   (unless (response-data r)
     (parameterize-break #f
+      (log-http-easy-debug "draining response ~.s" r)
       (define drain-promise
         (delay/thread
-         (with-handlers ([exn:break? void])
-           (parameterize-break #t
-             (define in (response-output r))
-             (unless (port-closed? in)
-               (define data (port->bytes in))
-               (set-response-data! r data)
-               (close-input-port in))))))
+         (define in (response-output r))
+         (unless (port-closed? in)
+           (define data (port->bytes in))
+           (set-response-data! r data)
+           (close-input-port in))))
       (unless (sync/timeout/enable-break t drain-promise)
-        (raise (make-timeout-error 'drain)))
+        (log-http-easy-debug "timed out while draining response")
+        (raise (make-timeout-error 'request)))
       (force drain-promise))))
 
 (define (response-close! r)
@@ -162,6 +163,8 @@
   ;; time.
   (unless (response-closed? r)
     (parameterize-break #f
+      (log-http-easy-debug "closing response ~.s" r)
+      (set-response-closed?! r #t)
       (define drain-promise
         (delay/thread
          (define in (response-output r))
@@ -171,13 +174,14 @@
       (define close-thd
         (thread
          (lambda ()
-           (unless (sync/timeout 1 drain-promise)
-             (log-http-easy-warning "timed out while closing response")
-             ((response-destroyer r) r))
-           ((response-closer r) r)
-           (log-http-easy-debug "response closed"))))
-      (set-response-closed?! r #t)
-      (sync/enable-break (thread-dead-evt close-thd))
+           (cond
+             [(sync/timeout 1 drain-promise)
+              (log-http-easy-debug "response closed")
+              ((response-closer r) r)]
+             [else
+              (log-http-easy-debug "timed out while closing response; abandoning connection")
+              ((response-abandoner r) r)]))))
+      (sync/enable-break close-thd)
       (force drain-promise))))
 
 

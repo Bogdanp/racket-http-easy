@@ -20,10 +20,7 @@
    (lambda ()
      (let connection-loop ()
        (sync
-        (handle-evt
-         stop-ch
-         (lambda (_)
-           (void)))
+        (handle-evt stop-ch void)
         (handle-evt
          (tcp-accept-evt listener)
          (lambda (ports)
@@ -35,8 +32,9 @@
                [(or (eof-object? line)
                     (string=? line ""))
                 (tcp-abandon-port in)
-                (with-handlers ([exn:fail? (lambda (e)
-                                             (log-error "tcp-server handler failed: ~a" (exn-message e)))])
+                (with-handlers ([exn:fail?
+                                 (lambda (e)
+                                   (log-error "tcp-server handler failed: ~a" (exn-message e)))])
                   (handle (reverse lines) out))]
                [else
                 (loop (cons line lines))]))
