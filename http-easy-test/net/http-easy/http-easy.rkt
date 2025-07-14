@@ -461,6 +461,12 @@
             (check-true (port-commit-peeked 5 (port-progress-evt in) always-evt in))
             (check-equal? (read-bytes 8 in) #", world!")))))))
 
+   (test-case "handles connect errors"
+     (check-exn
+      #rx"tcp-connect: host not found"
+      (lambda ()
+        (get "http://adomainthatdoesnotexist.com"))))
+
    ;; This is similar to a test I wrote for http-client in the
    ;; net-test pkg and depends on its rst-server.
    (when (memq (system-type 'os) '(unix macosx))

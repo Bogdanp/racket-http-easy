@@ -59,41 +59,34 @@
     http-conn-close!)))
 
 (define (pool-lease p [t #f])
-  (define impl (pool-impl p))
-  (define maybe-lease-timeout-ms
+  (define impl
+    (pool-impl p))
+  (define timeout
     (and t (seconds->ms (timeout-config-lease t))))
+  (define leased-conn
+    (d:pool-take! impl timeout))
+  (unless leased-conn
+    (raise (make-timeout-error 'lease)))
+  (define out (make-channel))
+  (define thd
+    (thread
+     (lambda ()
+       (with-handlers ([exn:break? void]
+                       [exn:fail? (λ (e) (channel-put out e))])
+         (channel-put out ((pool-connector p) leased-conn))))))
+  (define conn-or-exn
+    (sync/timeout (and t (timeout-config-connect t)) out))
   (cond
-    [(d:pool-take! impl maybe-lease-timeout-ms)
-     => (lambda (leased-c)
-          (define out (make-channel))
-          (define thd
-            (thread
-             (lambda ()
-               (with-handlers ([exn:break? void]
-                               [exn:fail? (λ (e) (channel-put out e))])
-                 (channel-put out ((pool-connector p) leased-c))))))
-          (define res
-            (sync/timeout (and t (timeout-config-connect t)) out))
-
-          (cond
-            [(exn:fail? res)
-             (log-http-easy-warning "connection failed: ~a" (exn-message res))
-             (http-conn-close! leased-c)
-             (d:pool-release! impl leased-c)
-             (raise res)]
-
-            [(not res)
-             (log-http-easy-warning "connection timed out")
-             (break-thread thd)
-             (http-conn-close! leased-c)
-             (d:pool-release! impl leased-c)
-             (raise (make-timeout-error 'connect))]
-
-            [else
-             res]))]
-
-    [else
-     (raise (make-timeout-error 'lease))]))
+    [(exn:fail? conn-or-exn)
+     (log-http-easy-warning "connection failed: ~a" (exn-message conn-or-exn))
+     (d:pool-abandon! impl leased-conn)
+     (raise conn-or-exn)]
+    [(not conn-or-exn)
+     (log-http-easy-warning "connection timed out")
+     (d:pool-abandon! impl leased-conn)
+     (break-thread thd)
+     (raise (make-timeout-error 'connect))]
+    [else conn-or-exn]))
 
 (define (pool-release p c)
   (d:pool-release! (pool-impl p) c))
