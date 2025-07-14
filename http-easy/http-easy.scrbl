@@ -17,12 +17,12 @@
                      racket/promise
                      xml))
 
-@title{@tt{http-easy}: a high-level HTTP client}
+@title{http-easy: a high-level HTTP client}
 @author[(author+email "Bogdan Popa" "bogdan@defn.io")]
 @defmodule[net/http-easy]
 
 This library wraps @tt{net/http-client} to provide a simple interface
-for day-to-day use.  It automatically handles:
+for day-to-day use. It automatically handles:
 
 @itemlist[
   @item{connection pooling}
@@ -86,10 +86,16 @@ response returns its underlying connection to the pool:
 
 @(define sr (secref "guide:streaming"))
 
-If you forget to manually close a response, its underlying connection
-will get returned to the pool when the response gets garbage-collected.
-Unless you explicitly use @|sr|, you don't have to worry about this
-much.
+Responses to requests where @racket[#:close?] is @racket[#t]
+or @racket[#:stream?] is @racket[#f] are automatically read
+and closed before they are returned, so you don't have to call
+@racket[response-close!].
+
+@|sr| are automatically closed upon garbage-collection. Closing a
+response involves potentially reading the remaining response data, which
+may be blocked by a slow server. For high throughput use cases, you
+should manually call @racket[response-close!] on a streaming response
+when you're done with it.
 
 @subsection[#:tag "guide:streaming"]{Streaming Responses}
 
@@ -312,22 +318,24 @@ scheme and url-encode the path to the socket as the host.
                        [#:ssl-context ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?)) (delay (ssl-secure-client-context))]
                        [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]
                        [#:proxies proxies (listof proxy?) null]) session?]{
-  Produces a @racket[session?] value with @racket[#:pool-config] as
-  its connection pool configuration.  Each requested scheme, host and
-  port pair has its own connection pool.
+  Produces a @deftech{session} with @racket[#:pool-config] as its
+  connection pool configuration. Each @tech[#:key "same origin"]{origin}
+  gets its own connection pool.
 
-  The @racket[#:ssl-context] argument controls how HTTPS connections
-  are handled.  The default implementation verifies TLS certificates,
-  verifies hostnames and avoids using weak ciphers.  To use a custom
-  certificate chain or private key, you can use
+  The @racket[#:ssl-context] argument controls how HTTPS
+  connections are handled. The default implementation verifies TLS
+  certificates, verifies hostnames and avoids using weak ciphers.
+  To use a custom certificate chain or private key, you can use
   @racket[ssl-make-client-context].
 
-  The @racket[#:cookie-jar] argument specifies the cookie jar to use
-  to store cookies between requests made against a session.  The
-  default is to discard all cookies.  See @racket[list-cookie-jar%].
+  The @racket[#:cookie-jar] argument specifies the cookie jar to use to
+  store cookies between requests made against a session. The default is
+  to discard all cookies. See @racket[list-cookie-jar%].
 
   The @racket[#:proxies] argument specifies an optional list of
   @tech{proxies} to use when making requests.
+
+  Sessions are thread-safe but not kill-safe.
 
   @history[
     #:changed "0.6" @elem{The @racket[#:ssl-context] argument accepts promises.}
@@ -337,6 +345,8 @@ scheme and url-encode the path to the socket as the host.
 
 @defproc[(session-close! [s session?]) void?]{
   Closes @racket[s] and all of its associated connections and responses.
+  If any of the responses associated with @racket[session] are still
+  open by the time this procedure is called, an exception is raised.
 }
 
 @defproc[(session-request [s session?]
@@ -360,12 +370,11 @@ scheme and url-encode the path to the socket as the host.
   @racket[uri] argument may be a @tech{literal URL}.
 
   Response values returned by this function must be closed before their
-  underlying connection is returned to the pool. If the @racket[close?]
-  argument is @racket[#t], this is done automatically. Ditto if the
-  responses are garbage-collected.
-
-  If the @racket[close?] argument is @racket[#t], then the response's
-  output port is drained and the connection is closed.
+  underlying connection is returned to the pool. If @racket[close?]
+  is @racket[#t] or if @racket[stream?] is @racket[#f], this is done
+  automatically before a response is returned. When @racket[close?] is
+  @racket[#f] and @racket[stream?] is @racket[#t], responses are
+  closed automatically before they are garbage-collected.
 
   If the @racket[stream?] argument is @racket[#f] (the default), then
   the response's output port is drained and the resulting byte string
@@ -440,7 +449,7 @@ scheme and url-encode the path to the socket as the host.
   that does not decode user, path, query and fragment components
   upon conversion from string. When converting to a string, only
   the components of the aforementioned fields that are not already
-  percent-encoded are encoded. A component is considered to be percent
+  percent-encoded get encoded. A component is considered to be percent
   encoded if all of its percent characters are followed by two
   hexadecimal characters.
 
@@ -571,8 +580,8 @@ scheme and url-encode the path to the socket as the host.
 @defproc[(response-drain! [r response?]
                           [t (or/c #f (and/c real? (not/c negative?))) #f]) void?]{
   Drains @racket[r]'s output port. When @racket[t] is provided, a
-  timeout error is raised if draining the response takes more than
-  @racket[t] seconds.
+  request timeout error is raised if draining the response takes more
+  than @racket[t] seconds.
 
   @history[
    #:changed "0.9" @elem{Added the @racket[#t] argument.}
@@ -580,7 +589,11 @@ scheme and url-encode the path to the socket as the host.
 }
 
 @defproc[(response-close! [r response?]) void?]{
-  Closes @racket[r] and returns its underlying connection to the pool.
+  Closes @racket[r] and returns its underlying connection to the
+  pool. Closing a response potentially involves reading its remaining
+  response data, so this procedure imposes a 1 second timeout on closing
+  the response. Upon timeout, destroys the connection and raises an
+  exception.
 }
 
 
@@ -597,11 +610,10 @@ scheme and url-encode the path to the socket as the host.
 @defproc[(make-pool-config [#:max-size max-size limit/c 128]
                            [#:idle-timeout idle-timeout timeout/c 600]) pool-config?]{
 
-  Produce a pool config values that can be passed to
-  @racket[make-session].
+  Returns a pool config that can be passed to @racket[make-session].
 
   The @racket[max-size] argument controls the maximum number of
-  connections in a pool.  Once a pool reaches this size, leasing a
+  connections in a pool. Once a pool reaches this size, leasing a
   connection blocks until one is available or until the @tt{lease}
   timeout is reached.
 
@@ -749,6 +761,40 @@ sent to a remote server.
 
 @subsection{Timeouts}
 
+When constructing a @tech{session}, you may provide lease, connect
+and request timeouts using a @tech{timeout config}. These control the
+maximum amount of time @racket[session-request] will wait until a
+connection is leased from the pool, until a connection is established
+with the remote server and until the remote server receives the request
+and finishes sending its headers, respectively.
+
+For a non-streaming, @racket[#:close? #f], request, the request timeout
+is re-applied when reading the response body. For a streaming request,
+you can use the usual Racket techniques in order to time out reading
+from the response data port. For example, the following block of code
+will read incrementally from a response and time out if the time between
+loop iterations exceeds 60 seconds.
+
+@racketblock[
+  (define resp ...)
+  (define buf (make-bytes 4096))
+  (let loop ()
+    (sync
+     (handle-evt
+      (alarm-evt (+ (current-inexact-monotonic-milliseconds) 60000) #t)
+      (lambda (_)
+        (response-close! resp)
+        (error 'timeout)))
+     (handle-evt
+      (response-output resp)
+      (lambda (in)
+        (define n-read
+          (read-bytes-avail! buf in))
+        (unless (eof-object? n-read)
+          (println (subbytes buf 0 n-read))
+          (loop))))))
+]
+
 @defthing[timeout/c (or/c false/c (and/c real? positive?))]{
   The contract for timeout values.  All timeout values represent seconds.
 }
@@ -761,7 +807,7 @@ sent to a remote server.
                               [#:connect connect timeout/c 5]
                               [#:request request timeout/c 30]) timeout-config?]{
 
-  Produces a timeout config value that can be passed to
+  Produces a @deftech{timeout config} that can be passed to
   @racket[session-request].
 
   The @racket[lease] argument controls the maximum amount of time
