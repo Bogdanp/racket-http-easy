@@ -93,9 +93,9 @@ and closed before they are returned, so you don't have to call
 
 @|sr| are automatically closed upon garbage-collection. Closing a
 response involves potentially reading the remaining response data, which
-may be blocked by a slow server. For high throughput use cases, you
-should manually call @racket[response-close!] on a streaming response
-when you're done with it.
+may be blocked by a slow server or connection. For high throughput use
+cases, you should manually call @racket[response-close!] on a streaming
+response when you're done with it.
 
 @subsection[#:tag "guide:streaming"]{Streaming Responses}
 
