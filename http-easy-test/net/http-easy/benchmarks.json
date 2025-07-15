@@ -1,0 +1,98 @@
+{
+  "Racket chez-scheme 8.17.0.6 (macosx aarch64) [Darwin hercules.local 24.5.0 Darwin Kernel Version 24.5.0: Tue Apr 22 19:54:25 PDT 2025; root:xnu-11417.121.6~2/RELEASE_ARM64_T6020 arm64]": {
+    "concurrent-GET": [
+      {
+        "cpu-time": 3607,
+        "gc-time": 210,
+        "real-time": 3730,
+        "timestamp": 1752580690
+      },
+      {
+        "cpu-time": 3776,
+        "gc-time": 210,
+        "real-time": 3902,
+        "timestamp": 1752580672
+      },
+      {
+        "cpu-time": 3778,
+        "gc-time": 214,
+        "real-time": 3876,
+        "timestamp": 1752580652
+      },
+      {
+        "cpu-time": 3804,
+        "gc-time": 216,
+        "real-time": 3900,
+        "timestamp": 1752580562
+      },
+      {
+        "cpu-time": 4093,
+        "gc-time": 216,
+        "real-time": 4189,
+        "timestamp": 1752580492
+      },
+      {
+        "cpu-time": 3881,
+        "gc-time": 216,
+        "real-time": 3979,
+        "timestamp": 1752580466
+      },
+      {
+        "cpu-time": 3763,
+        "gc-time": 213,
+        "real-time": 3860,
+        "timestamp": 1752580446
+      },
+      {
+        "cpu-time": 3567,
+        "gc-time": 208,
+        "real-time": 3690,
+        "timestamp": 1752580421
+      },
+      {
+        "cpu-time": 3790,
+        "gc-time": 209,
+        "real-time": 3916,
+        "timestamp": 1752580355
+      },
+      {
+        "cpu-time": 5532,
+        "gc-time": 428,
+        "real-time": 5632,
+        "timestamp": 1752580332
+      }
+    ],
+    "sequential-GET": [
+      {
+        "cpu-time": 3484,
+        "gc-time": 86,
+        "real-time": 3784,
+        "timestamp": 1752580686
+      },
+      {
+        "cpu-time": 3886,
+        "gc-time": 87,
+        "real-time": 4162,
+        "timestamp": 1752580667
+      },
+      {
+        "cpu-time": 3529,
+        "gc-time": 89,
+        "real-time": 3821,
+        "timestamp": 1752580417
+      },
+      {
+        "cpu-time": 3866,
+        "gc-time": 87,
+        "real-time": 4143,
+        "timestamp": 1752580350
+      },
+      {
+        "cpu-time": 5881,
+        "gc-time": 249,
+        "real-time": 6193,
+        "timestamp": 1752580325
+      }
+    ]
+  }
+}
