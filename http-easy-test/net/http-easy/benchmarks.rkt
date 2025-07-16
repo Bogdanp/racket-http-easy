@@ -99,14 +99,14 @@
              ['cpu-time old-cpu-time]
              ['gc-time old-gc-time])
       (car existing-benchmarks))
-    (when (or (> cpu-time (* old-cpu-time tolerance))
-              (> real-time (* old-real-time tolerance))
+    (when (or (> real-time (* old-real-time tolerance))
+              (> cpu-time (* old-cpu-time tolerance))
               (> gc-time (* old-gc-time tolerance)))
       (fail-check
        (string-append
         (format "benchmark ~a failed~n" name)
-        (format "  cpu time: ~s (was: ~s; slowdown: ~a)~n" cpu-time old-cpu-time (~slowdown cpu-time old-cpu-time))
         (format "  real time: ~s (was: ~s; slowdown: ~a)~n" real-time old-real-time (~slowdown real-time old-real-time))
+        (format "  cpu time: ~s (was: ~s; slowdown: ~a)~n" cpu-time old-cpu-time (~slowdown cpu-time old-cpu-time))
         (format "  gc time: ~s (was: ~s; slowdown: ~a)" gc-time old-gc-time (~slowdown gc-time old-gc-time))))))
   (write-benchmarks
    (&benchmark
