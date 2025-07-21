@@ -55,19 +55,22 @@
         (sort > #:key (λ (ht) (hash-ref ht 'timestamp)))
         (keep 5)
         (reverse)))
+  (define n-benchmarks
+    (length benchmarks))
   (parameterize ([plot-y-label "Time (ms)"]
                  [plot-x-label "Measurements"])
     (plot-pict
      #:title (~a name)
      (for/list ([(bench idx) (in-indexed (in-list benchmarks))])
+       (define idx+1 (add1 idx))
        (define timestamp
          (hash-ref bench 'timestamp))
        (discrete-histogram
+        #:line-color idx+1
+        #:color idx+1
         #:label (date->string (seconds->date timestamp) #t)
-        #:line-color (add1 idx)
-        #:color (add1 idx)
-        #:x-min (add1 idx)
-        #:skip (+ (length benchmarks) 0.5)
+        #:x-min idx+1
+        #:skip (+ n-benchmarks 0.5)
         (list
          (list "Real" (hash-ref bench 'real-time))
          (list "CPU" (hash-ref bench 'cpu-time))
