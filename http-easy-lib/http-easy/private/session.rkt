@@ -31,39 +31,41 @@
 
 (provide
  (contract-out
-  [make-session (->* []
-                     [#:pool-config pool-config?
-                      #:ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?))
-                      #:cookie-jar (or/c #f (is-a?/c cookie-jar<%>))
-                      #:proxies (listof proxy?)]
-                     session?)]
-  [session? (-> any/c boolean?)]
-  [session-close! (-> session? void?)]
-  [session-request (->i ([s session?]
-                         [urlish urlish/c])
-                        (#:close? [close? boolean?]
-                         #:stream? [stream? boolean?]
-                         #:method [method method/c]
-                         #:headers [headers headers/c]
-                         #:params [params query-params/c]
-                         #:auth [auth (or/c #f auth-procedure/c)]
-                         #:data [data (or/c #f bytes? string? input-port? payload-procedure/c)]
-                         #:form [form form-data/c]
-                         #:json [json jsexpr?]
-                         #:timeouts [timeouts timeout-config?]
-                         #:max-attempts [max-attempts exact-positive-integer?]
-                         #:max-redirects [max-redirects exact-nonnegative-integer?]
-                         #:user-agent [user-agent (or/c bytes? string?)])
-
-                        #:pre/name (data form json)
-                        "at most one of the #:data, #:form or #:json keyword arguments"
-                        (cond
-                          [(supplied? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
-                          [(supplied? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
-                          [(supplied? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
-                          [else #t])
-
-                        [res response?])]))
+  [make-session
+   (->* []
+        [#:pool-config pool-config?
+         #:ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?))
+         #:cookie-jar (or/c #f (is-a?/c cookie-jar<%>))
+         #:proxies (listof proxy?)]
+        session?)]
+  [session?
+   (-> any/c boolean?)]
+  [session-close!
+   (-> session? void?)]
+  [session-request
+   (->i ([s session?]
+         [urlish urlish/c])
+        (#:close? [close? boolean?]
+         #:stream? [stream? boolean?]
+         #:method [method method/c]
+         #:headers [headers headers/c]
+         #:params [params query-params/c]
+         #:auth [auth (or/c #f auth-procedure/c)]
+         #:data [data (or/c #f bytes? string? input-port? payload-procedure/c)]
+         #:form [form form-data/c]
+         #:json [json jsexpr?]
+         #:timeouts [timeouts timeout-config?]
+         #:max-attempts [max-attempts exact-positive-integer?]
+         #:max-redirects [max-redirects exact-nonnegative-integer?]
+         #:user-agent [user-agent (or/c bytes? string?)])
+        #:pre/name (data form json)
+        "at most one of the #:data, #:form or #:json keyword arguments"
+        (cond
+          [(supplied? data) (and (unsupplied-arg? form) (unsupplied-arg? json))]
+          [(supplied? form) (and (unsupplied-arg? data) (unsupplied-arg? json))]
+          [(supplied? json) (and (unsupplied-arg? data) (unsupplied-arg? form))]
+          [else #t])
+        [res response?])]))
 
 (struct session
   (cust
@@ -76,23 +78,24 @@
    [closed? #:mutable])
   #:transparent)
 
-(define (make-session #:pool-config [conf (make-pool-config)]
-                      #:ssl-context [ssl-ctx (delay/sync (ssl-secure-client-context))]
-                      #:cookie-jar [cookies #f]
-                      #:proxies [proxies null])
-  (define s
+(define (make-session
+         #:pool-config [conf (make-pool-config)]
+         #:ssl-context [ssl-ctx (delay/sync (ssl-secure-client-context))]
+         #:cookie-jar [cookies #f]
+         #:proxies [proxies null])
+  (define the-session
     (session
-     (make-custodian)
-     (make-semaphore 1)
-     conf
-     (make-hash)
-     ssl-ctx
-     cookies
-     proxies
-     #f))
-  (begin0 s
-    (will-register executor s session-close!)
-    (log-http-easy-debug "session opened")))
+     #;cust (make-custodian)
+     #;sema (make-semaphore 1)
+     #;conf conf
+     #;pools (make-hash)
+     #;ssql-ctx ssl-ctx
+     #;cookies cookies
+     #;proxies proxies
+     #;closed? #f))
+  (will-register executor the-session session-close!)
+  (log-http-easy-debug "session opened")
+  the-session)
 
 (define (session-close! s)
   (call-with-semaphore (session-sema s)
@@ -334,7 +337,9 @@
    (thread/suspend-to-kill
     (lambda ()
       (let loop ()
-        (with-handlers ([exn:fail? (λ (e) (log-http-easy-warning "will execution failed: ~a" (exn-message e)))])
+        (with-handlers ([exn:fail?
+                         (lambda (e)
+                           (log-http-easy-warning "will execution failed: ~a" (exn-message e)))])
           (will-execute executor))
         (loop))))))
 
