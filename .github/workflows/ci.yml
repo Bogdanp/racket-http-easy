@@ -16,4 +16,4 @@ jobs:
           variant: ${{ matrix.racket-variant }}
           version: ${{ matrix.racket-version }}
       - run: raco pkg install --batch --auto http-easy-lib/ http-easy-test/ http-easy/
-      - run: raco test http-easy-test/
+      - run: xvfb-run -a raco test -j "$(nproc)" http-easy-test/
