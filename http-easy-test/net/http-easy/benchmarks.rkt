@@ -85,11 +85,12 @@
 (define-check (check-benchmark name tolerance proc)
   (define timestamp (current-seconds))
   (define machine (~machine))
+  (void (proc #t))
   (sync (system-idle-evt))
   (collect-garbage)
   (collect-garbage)
   (define-values (_ cpu-time real-time gc-time)
-    (time-apply proc null))
+    (time-apply proc (list #f)))
   (define benchmarks
     (read-benchmarks))
   (define &benchmark
@@ -149,8 +150,8 @@
          (parameterize ([current-session (make-session)])
            (check-benchmark
             'sequential-GET 1.20
-            (lambda ()
-              (for ([_ (in-range 10000)])
+            (lambda (warmup?)
+              (for ([_ (in-range (if warmup? 1000 10000))])
                 (get addr))))
            (session-close! (current-session))))))
 
@@ -162,9 +163,9 @@
          (parameterize ([current-session (make-session)])
            (check-benchmark
             'concurrent-GET 1.10
-            (lambda ()
+            (lambda (warmup?)
               (define promises
-                (for/list ([_ (in-range 10000)])
+                (for/list ([_ (in-range (if warmup? 1000 10000))])
                   (delay/thread
                    (call-with-semaphore sema
                      (lambda ()

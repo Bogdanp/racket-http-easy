@@ -94,5 +94,23 @@
         "timestamp": 1752580325
       }
     ]
+  },
+  "Racket chez-scheme 8.18.0.5 (macosx aarch64) [Darwin hercules.local 24.5.0 Darwin Kernel Version 24.5.0: Tue Apr 22 19:54:25 PDT 2025; root:xnu-11417.121.6~2/RELEASE_ARM64_T6020 arm64]": {
+    "concurrent-GET": [
+      {
+        "cpu-time": 4121,
+        "gc-time": 226,
+        "real-time": 4232,
+        "timestamp": 1753765362
+      }
+    ],
+    "sequential-GET": [
+      {
+        "cpu-time": 4122,
+        "gc-time": 65,
+        "real-time": 4356,
+        "timestamp": 1753765357
+      }
+    ]
   }
 }
