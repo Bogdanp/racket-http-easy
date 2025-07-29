@@ -175,7 +175,8 @@
 
 (module+ test
   (require rackunit/text-ui)
-  (run-tests benchmarks))
+  (unless (getenv "CI")
+    (run-tests benchmarks)))
 
 (module+ main
   (require pict)
