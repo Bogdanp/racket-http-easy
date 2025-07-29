@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        racket-version: ['8.6', '8.7', 'current']
+        racket-version: ['8.12', '8.13', 'current']
         racket-variant: ['CS']
     name: Build & Test on Racket ${{ matrix.racket-version }} (${{ matrix.racket-variant }})
     steps:
