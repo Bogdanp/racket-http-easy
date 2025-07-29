@@ -104,30 +104,35 @@
         (for ([p (in-hash-values (session-pools s))])
           (pool-close! p))
         (set-session-closed?! s #t)
+        (hash-clear! (session-pools s))
         (custodian-shutdown-all (session-cust s))
         (log-http-easy-debug "session closed")))))
 
 (define (session-lease s url timeouts)
   (parameterize ([current-custodian (session-cust s)])
+    (define pools (session-pools s))
     (define k (pool-key url))
     (define p
-      (call-with-semaphore (session-sema s)
-        (lambda ()
-          (hash-ref!
-           (session-pools s) k
-           (lambda ()
-             (log-http-easy-debug "creating pool for key ~a" k)
-             (define ssl-ctx (session-ssl-ctx s))
-             (define proxies (session-proxies s))
-             (define connector (make-url-connector url ssl-ctx proxies))
-             (make-pool (session-conf s) connector))))))
+      (or (hash-ref pools k #f)
+          (call-with-semaphore (session-sema s)
+            (lambda ()
+              (when (session-closed? s)
+                (error 'session-lease "session closed"))
+              (hash-ref!
+               pools k
+               (lambda ()
+                 (log-http-easy-debug "creating pool for key ~a" k)
+                 (define ssl-ctx (session-ssl-ctx s))
+                 (define proxies (session-proxies s))
+                 (define connector (make-url-connector url ssl-ctx proxies))
+                 (make-pool (session-conf s) connector)))))))
     (pool-lease p timeouts)))
 
 (define (get-session-pool s url)
-  (define k (pool-key url))
-  (call-with-semaphore (session-sema s)
-    (lambda ()
-      (hash-ref (session-pools s) k #f))))
+  (hash-ref
+   #;ht (session-pools s)
+   #;key (pool-key url)
+   #;failure-result #f))
 
 (define (session-release s url c)
   (define p (get-session-pool s url))

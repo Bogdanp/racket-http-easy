@@ -564,7 +564,18 @@
               (semaphore-post sema)
               (semaphore-post sema)
               (semaphore-wait broken?-sema)
-              (check-not-false (get addr)))))))))))
+              (check-not-false (get addr))))))))
+
+    (test-suite
+     "close"
+
+     (test-case "lease after close raises an error"
+       (define s (make-session))
+       (session-close! s)
+       (check-exn
+        #rx"session-lease: session closed"
+        (lambda ()
+          (session-request s "https://example.com"))))))))
 
 (module+ test
   (require rackunit/text-ui)
