@@ -471,37 +471,32 @@
    ;; net-test pkg and depends on its rst-server.
    (when (memq (system-type 'os) '(unix macosx))
      (test-case "handles RST"
-       (match-define (list stdout stdin _pid stderr control)
+       (match-define (list stdout stdin _pid stderr _control)
          (parameterize ([subprocess-group-enabled #t])
            (process* (find-system-path 'exec-file) "-l" "tests/net/http-client/rst-server" "full")))
-       (dynamic-wind
-         void
-         (lambda ()
-           (match (read-line stdout)
-             [(regexp #rx"PORT: (.+)" (list _ (app string->number port)))
-              (define stderr-thd (thread (lambda () (copy-port stderr (current-error-port)))))
-              (define stdout-thd (thread (lambda () (copy-port stdout (current-output-port)))))
-              (check-exn
-               #rx"Connection reset by peer"
-               (lambda ()
-                 (get (format "http://127.0.0.1:~a" port))))
-              (kill-thread stderr-thd)
-              (kill-thread stdout-thd)]
-             [(? eof-object?)
-              (define err
-                (let ([out (open-output-string)])
-                  (copy-port stderr out)
-                  (get-output-string out)))
-              ;; The server is not available on older versions of
-              ;; Racket, so deal with that possibility.
-              (unless (or (regexp-match? #rx"standard-module-name-resolver: collection not found" err)
-                          (regexp-match? #rx"open-input-file: cannot open module file" err))
-                (fail-check err))]))
-         (lambda ()
-           (control 'interrupt)
-           (close-output-port stdin)
-           (close-input-port stdout)
-           (close-input-port stderr)))))
+       (match (read-line stdout)
+         [(regexp #rx"PORT: (.+)" (list _ (app string->number port)))
+          (define stderr-thd (thread (lambda () (copy-port stderr (current-error-port)))))
+          (define stdout-thd (thread (lambda () (copy-port stdout (current-output-port)))))
+          (check-exn
+           #rx"Connection reset by peer"
+           (lambda ()
+             (get (format "http://127.0.0.1:~a" port))))
+          (kill-thread stderr-thd)
+          (kill-thread stdout-thd)]
+         [(? eof-object?)
+          (define err
+            (let ([out (open-output-string)])
+              (copy-port stderr out)
+              (get-output-string out)))
+          ;; The server is not available on older versions of
+          ;; Racket, so deal with that possibility.
+          (unless (or (regexp-match? #rx"standard-module-name-resolver: collection not found" err)
+                      (regexp-match? #rx"open-input-file: cannot open module file" err))
+            (fail-check err))])
+       (close-output-port stdin)
+       (close-input-port stdout)
+       (close-input-port stderr)))
 
    (test-suite
     "session"
