@@ -7,6 +7,7 @@
                      net/cookies/user-agent
                      net/http-client
                      net/http-easy
+                     net/uri-codec
                      net/url
                      openssl
                      racket/base
@@ -458,6 +459,19 @@ scheme and url-encode the path to the socket as the host.
   standards-non-compliant servers.
 
   @history[#:added "0.7"]
+}
+
+@defparam[
+  current-url/literal-query-param-encoder
+  encoder (-> string? string?)
+  #:value form-urlencoded-encode
+]{
+  Some services are both non-compliant and particularly picky about
+  how their query string parameters are encoded. Use this parameter to
+  precisely control how a @tech{literal URL}'s query params are encoded
+  in such cases.
+
+  @history[#:added "0.10"]
 }
 
 

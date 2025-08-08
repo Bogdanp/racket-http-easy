@@ -101,7 +101,20 @@
 
     (test-case "examples"
       (let ([example "https://d12xz7rzfw7xh7.cloudfront.net/v1/download/episodes/original/43796816?a=en&eg=https%3A%2F%2Fapi.spreaker.com%2Fepisode%2F57758598&eu=https%3A%2F%2Fdts.podtrac.com%2Fredirect.mp3%2Fapi.spreaker.com%2Fdownload%2Fepisode%2F57758598%2Ftmp9u92imeh.mp3&p=3&q=9808638&f=559&r=128&t=3&u=11393707&o=2401044&d=2023-11-22&g=57758598&h=5937276&k=https%3A%2F%2Fwww.spreaker.com%2Fshow%2F5937276%2Fepisodes%2Ffeed&i=43796816&n=Petros+And+Money&b=%5B%22IAB6-7%22%2C%22IAB7-39%22%2C%22IAB11-4%22%2C%22IAB26%22%5D&c=%5B%22sports%22%5D&l=%5B%22hosting_plan_ihr%22%5D&m=%5B904294%2C904294%2C904294%2C1436858%2C1436858%2C1436858%2C1436858%2C1436858%2C1937091%2C1937091%2C1937091%5D&rr=4444444444444&fax=0.4&Expires=1732993926&Signature=XDgffPCg91Gd6ThNXoenP4axeBN2zEUK6Bs56F2Pw-LGE9XJuLPghg1f2etV1l6I3%7Ed7Ms12AQbkCp1vfkqleStA30fPDH2PpO1IKkw5k7PlSYyPCeb1DOc1No8s6KHn7C8DZ7swXjWEz5WGzrj6KtSgI%7EWMhQyiLuGxEmT9YBQViowMGeO7p1PNocQmT-SKo8WqMDMdzMmSXP2WQFYSk3AjFM2ukhGLzDkIcrNxy2ZRLGeUykF9ZWgNnGGAOfwsmx6n0IFQZcdDo2QpRKxOUjSBYOTxTo1Y716OYb73P59QurF%7El-jM7WLHgvFxWnJQHj9SwCnjSaCJgzDBlh%7EEDQ__&Key-Pair-Id=K1J2BR3INU6RYD"])
-        (check-equal? (url/literal->string (string->url/literal example)) example))))
+        (check-equal? (url/literal->string (string->url/literal example)) example)))
+
+    (test-case "current-url/literal-query-param-encoder"
+      (check-equal?
+       (url/literal->string
+        (string->url/literal
+         "https://example.com?search=(status:(values:List(DRAFT)))"))
+       "https://example.com?search=%28status%3A%28values%3AList%28DRAFT%29%29%29")
+      (parameterize ([current-url/literal-query-param-encoder values])
+        (check-equal?
+         (url/literal->string
+          (string->url/literal
+           "https://example.com?search=(status:(values:List(DRAFT)))"))
+         "https://example.com?search=(status:(values:List(DRAFT)))"))))
 
    (test-suite
     "is-percent-encoded?"

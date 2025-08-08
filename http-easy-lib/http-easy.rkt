@@ -36,6 +36,7 @@
  (all-from-out "http-easy/private/session.rkt")
  (all-from-out "http-easy/private/user-agent.rkt")
 
+ current-url/literal-query-param-encoder
  (struct-out url/literal)
  string->url/literal
  url/literal->string

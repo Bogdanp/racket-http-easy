@@ -344,7 +344,9 @@
       (let loop ()
         (with-handlers ([exn:fail?
                          (lambda (e)
-                           (log-http-easy-warning "will execution failed: ~a" (exn-message e)))])
+                           (log-http-easy-warning
+                            "will execution failed: ~a"
+                            (exn-message e)))])
           (will-execute executor))
         (loop))))))
 

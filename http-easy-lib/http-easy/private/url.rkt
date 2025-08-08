@@ -9,6 +9,7 @@
 
 (provide
  (struct-out url/literal)
+ current-url/literal-query-param-encoder
  string->url/literal
  url/literal->string
  is-percent-encoded?
@@ -27,6 +28,10 @@
 ;;
 ;; xref https://github.com/rmculpepper/racket-http123/issues/6
 (serializable-struct url/literal url ())
+
+;; An escape hatch for services that are super non-compliant.
+(define current-url/literal-query-param-encoder
+  (make-parameter form-urlencoded-encode))
 
 (define (string->url/literal s)
   (match-define (list _ scheme user ipv6host host port path query fragment)
@@ -64,6 +69,8 @@
     (url/literal scheme user host port abs? path query fragment)))
 
 (define (url/literal->string u)
+  (define query-param-encoder
+    (current-url/literal-query-param-encoder))
   (define out (open-output-string))
   (match-define (url scheme user host port abs? path query fragment) u)
   (when scheme
@@ -115,10 +122,10 @@
       (unless (zero? idx)
         (write-char #\& out))
       (match-define (cons (app symbol->string name) value) pair)
-      (write-string (maybe-percent-encode name form-urlencoded-encode) out)
+      (write-string (maybe-percent-encode name query-param-encoder) out)
       (when value
         (write-char #\= out)
-        (write-string (maybe-percent-encode value form-urlencoded-encode) out))))
+        (write-string (maybe-percent-encode value query-param-encoder) out))))
   (when fragment
     (write-char #\# out)
     (write-string (maybe-percent-encode fragment) out))
