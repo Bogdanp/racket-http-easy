@@ -351,34 +351,33 @@
 
 ;; help ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define ((make-url-connector u ssl-ctx proxies) conn)
-  (let ([ssl-ctx (if (promise? ssl-ctx)
-                     (force ssl-ctx)
-                     ssl-ctx)])
-    (cond
-      ;; NOTE: The http-client automatically closes connections when
-      ;; a response is chunked. So, don't be surprised if logging
-      ;; indicates that connections aren't being reused in that case.
-      [(http-conn-live? conn)
-       (log-http-easy-debug "reusing connection to ~a" (pool-key u))]
-      [else
-       (log-http-easy-debug "connecting to ~a" (pool-key u))
-       (match-define (struct* url ([scheme scheme] [host host] [port port])) u)
-       (case scheme
-         [("http+unix")
-          (define path (form-urlencoded-decode host))
-          (define-values (in out)
-            (unix-socket-connect path))
-          (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
-         [else
-          (or
-           (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
-             ((proxy-connect! p) conn u ssl-ctx))
-           (http-conn-open!
-            #:port (or port (if (equal? scheme "https") 443 80))
-            #:ssl? (and (equal? scheme "https") ssl-ctx)
-            conn host))])])
-    conn))
+(define ((make-url-connector u ssl-ctx-or-promise proxies) conn)
+  (define ssl-ctx
+    (force ssl-ctx-or-promise))
+  (cond
+    ;; NOTE: The http-client automatically closes connections when
+    ;; a response is chunked. So, don't be surprised if logging
+    ;; indicates that connections aren't being reused in that case.
+    [(http-conn-live? conn)
+     (log-http-easy-debug "reusing connection to ~a" (pool-key u))]
+    [else
+     (log-http-easy-debug "connecting to ~a" (pool-key u))
+     (match-define (struct* url ([scheme scheme] [host host] [port port])) u)
+     (case scheme
+       [("http+unix")
+        (define path (form-urlencoded-decode host))
+        (define-values (in out)
+          (unix-socket-connect path))
+        (http-conn-open! conn "" #:ssl? (list #f in out close-output-port))]
+       [else
+        (or
+         (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
+           ((proxy-connect! p) conn u ssl-ctx))
+         (http-conn-open!
+          #:port (or port (if (equal? scheme "https") 443 80))
+          #:ssl? (and (equal? scheme "https") ssl-ctx)
+          conn host))])])
+  conn)
 
 (define (headers->list headers)
   (for/list ([(k v) (in-hash headers)])
