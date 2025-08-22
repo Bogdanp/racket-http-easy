@@ -3,6 +3,7 @@
 (require json
          net/cookies
          net/http-easy
+         net/http-easy/middleware
          net/url
          racket/class
          racket/match
@@ -27,6 +28,8 @@
                   request-bindings/raw
                   request-headers/raw
                   request-post-data/raw
+                  response/empty
+                  response/jsexpr
                   response/output
                   see-other
                   temporarily/same-method)
@@ -570,7 +573,89 @@
        (check-exn
         #rx"session-lease: session closed"
         (lambda ()
-          (session-request s "https://example.com"))))))))
+          (session-request s "https://example.com")))))
+
+    (let* ([timings (make-hash)]
+           [timing-middleware
+            (make-keyword-procedure
+             (lambda (kws kw-args u k)
+               (define-values (res cpu-time real-time gc-time)
+                 (time-apply
+                  (lambda ()
+                    (keyword-apply k kws kw-args u null))
+                  null))
+               (hash-update!
+                #;ht timings
+                #;key u
+                #;update-proc
+                (lambda (timings)
+                  (cons (list cpu-time real-time gc-time) timings))
+                #;failure-result null)
+               (car res)))]
+           [token-box (box "token-1")]
+           [oauth-middleware
+            (make-keyword-procedure
+             (lambda (kws kw-args u k)
+               (match (keyword-apply k kws kw-args u null)
+                 [(response #:status-code 401)
+                  (set-box! token-box "token-2")
+                  (keyword-apply k kws kw-args u null)]
+                 [resp resp])))]
+           [oauth-handler
+            (lambda (req)
+              (define heads
+                (request-headers/raw req))
+              (define token
+                (let* ([v (headers-assq* #"authorization" heads)]
+                       [v (header-value v)])
+                  (bytes->string/utf-8 v #f 7)))
+              (match token
+                ["token-1"
+                 (response/jsexpr
+                  #:code 401
+                  (hasheq 'error "token expired"))]
+                ["token-2"
+                 (response/jsexpr
+                  (hasheq 'message "ok"))]
+                ["token-3"
+                 (response/jsexpr
+                  #:code 401
+                  (hasheq 'error "invalid token"))]))])
+      (test-suite
+       "middleware"
+
+       (test-case "instrumentation"
+         (call-with-web-server
+          (lambda (_req)
+            (response/empty))
+          (lambda (addr)
+            (parameterize ([current-session (make-session #:middleware timing-middleware)])
+              (define res (get addr))
+              (check-equal? (response-status-code res) 204)
+              (check-not-false (hash-ref timings (string->url addr)))))))
+
+       (test-case "oauth refresh"
+         (call-with-web-server
+          oauth-handler
+          (lambda (addr)
+            (set-box! token-box "token-1")
+            (define (oauth url headers params)
+              ((bearer-auth (unbox token-box)) url headers params))
+            (parameterize ([current-session (make-session #:middleware oauth-middleware)])
+              (check-equal? (response-status-code (get #:auth oauth addr)) 200)))))
+
+       (test-case "composition"
+         (call-with-web-server
+          oauth-handler
+          (lambda (addr)
+            (set-box! token-box "token-1")
+            (define (oauth url headers params)
+              ((bearer-auth (unbox token-box)) url headers params))
+            (define composed-middleware
+              (compose-middleware oauth-middleware timing-middleware))
+            (parameterize ([current-session (make-session #:middleware composed-middleware)])
+              (check-equal? (response-status-code (get #:auth oauth addr)) 200)
+              (check-= (length (hash-ref timings (string->url addr))) 2 0))))))))))
 
 (module+ test
   (require rackunit/text-ui)

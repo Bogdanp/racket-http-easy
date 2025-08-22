@@ -12,7 +12,8 @@
     "plot-gui-lib"
     "plot-lib"
     "rackunit-lib"
-    ("resource-pool-lib" #:version "0.1")
+    ["resource-pool-lib" #:version "0.1"]
     "threading-lib"
     "web-server-lib"))
-(define update-implies '("http-easy"))
+(define update-implies
+  '("http-easy"))

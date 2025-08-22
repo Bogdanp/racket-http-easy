@@ -7,6 +7,7 @@
                      net/cookies/user-agent
                      net/http-client
                      net/http-easy
+                     net/http-easy/middleware
                      net/uri-codec
                      net/url
                      openssl
@@ -272,8 +273,8 @@ scheme and url-encode the path to the socket as the host.
                [#:stream? stream? boolean? #f]
                [#:headers headers headers/c (hasheq)]
                [#:params params query-params/c null]
-               [#:auth auth (or/c false/c auth-procedure/c) #f]
-               [#:data data (or/c false/c bytes? string? input-port? payload-procedure/c) #f]
+               [#:auth auth (or/c #f auth-procedure/c) #f]
+               [#:data data (or/c #f bytes? string? input-port? payload-procedure/c) #f]
                [#:form form query-params/c _unsupplied]
                [#:json json jsexpr? _unsupplied]
                [#:timeouts timeouts timeout-config? (make-timeout-config)]
@@ -298,12 +299,11 @@ scheme and url-encode the path to the socket as the host.
 
 @subsection{Sessions}
 
-@deftogether[(
-  @defthing[method/c (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?)]
+@deftogether[
+ (@defthing[method/c (or/c 'delete 'head 'get 'options 'patch 'post 'put symbol?)]
   @defthing[headers/c (hash/c symbol? (or/c bytes? string?))]
-  @defthing[form-data/c (listof (cons/c symbol? (or/c false/c string?)))]
-  @defthing[query-params/c (listof (cons/c symbol? (or/c false/c string?)))]
-)]
+  @defthing[form-data/c (listof (cons/c symbol? (or/c #f string?)))]
+  @defthing[query-params/c (listof (cons/c symbol? (or/c #f string?)))])]
 
 @defparam[current-session session session? #:value (make-session)]{
   Holds the current session that is used by the @racket[delete],
@@ -315,10 +315,12 @@ scheme and url-encode the path to the socket as the host.
   Returns @racket[#t] when @racket[v] is a session value.
 }
 
-@defproc[(make-session [#:pool-config pool-config pool-config? (make-pool-config)]
-                       [#:ssl-context ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?)) (delay (ssl-secure-client-context))]
-                       [#:cookie-jar cookie-jar (or/c false/c (is-a?/c cookie-jar<%>)) #f]
-                       [#:proxies proxies (listof proxy?) null]) session?]{
+@defproc[(make-session
+          [#:pool-config pool-config pool-config? (make-pool-config)]
+          [#:ssl-context ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?)) (delay (ssl-secure-client-context))]
+          [#:cookie-jar cookie-jar (or/c #f (is-a?/c cookie-jar<%>)) #f]
+          [#:proxies proxies (listof proxy?) null]
+          [#:middleware middleware (or/c #f middleware/c)]) session?]{
   Produces a @deftech{session} with @racket[#:pool-config] as its
   connection pool configuration. Each @tech[#:key "same origin"]{origin}
   gets its own connection pool.
@@ -336,9 +338,14 @@ scheme and url-encode the path to the socket as the host.
   The @racket[#:proxies] argument specifies an optional list of
   @tech{proxies} to use when making requests.
 
+  The @racket[#:middleware] argument specifies an optional
+  @tech{middleware procedure} that can be used to customize the request
+  processing behavior of the session.
+
   Sessions are thread-safe but not kill-safe.
 
   @history[
+    #:changed "0.11" @elem{Added the @racket[#:middleware] argument.}
     #:changed "0.6" @elem{The @racket[#:ssl-context] argument accepts promises.}
     #:changed "0.3" @elem{Added the @racket[#:proxies] argument.}
   ]
@@ -357,8 +364,8 @@ scheme and url-encode the path to the socket as the host.
                           [#:method method method/c 'get]
                           [#:headers headers headers/c (hasheq)]
                           [#:params params query-params/c null]
-                          [#:auth auth (or/c false/c auth-procedure/c) #f]
-                          [#:data data (or/c false/c bytes? string? input-port? payload-procedure/c) #f]
+                          [#:auth auth (or/c #f auth-procedure/c) #f]
+                          [#:data data (or/c #f bytes? string? input-port? payload-procedure/c) #f]
                           [#:form form form-data/c _unsupplied]
                           [#:json json jsexpr? _unsupplied]
                           [#:timeouts timeouts timeout-config? (make-timeout-config)]
@@ -474,6 +481,80 @@ scheme and url-encode the path to the socket as the host.
   @history[#:added "0.10"]
 }
 
+@subsubsection{Session Middleware}
+@defmodule[net/http-easy/middleware]
+
+A @deftech{middleware procedure} may be used to customize the request
+processing behavior of a @tech{session}. For example, you can use
+middleware to track telemetry about requests. Or, you can use it
+implement OAuth re-authorization flows.
+
+@history[#:added "0.11"]
+
+@defthing[
+  middleware/c
+  (-> url?
+      middleware-continuation/c
+      #:method method/c
+      #:headers headers/c
+      #:params query-params/c
+      #:auth (or/c #f auth-procedure/c)
+      #:data (or/c #f bytes? string? input-port? payload-procedure/c)
+      #:history (listof response?)
+      #:attempts exact-nonnegative-integer?
+      #:redirects exact-nonnegative-integer?
+      response?)]{
+  The contract for @tech{middleware procedures}.
+
+  The first positional argument is the URL being requested. The second
+  positional argument is the procedure the middleware must call in order
+  to perform the request.
+
+  The @racket[#:method], @racket[#:headers], @racket[#:params],
+  @racket[#:auth], and @racket[#:data] keyword arguments are
+  normalized versions of the keyword arguments passed to the original
+  @racket[session-request].
+
+  The @racket[#:history] argument contains the list of requests made
+  so far (eg. if redirects were followed).
+
+  The @racket[#:attempts] and @racket[#:redirects] arguments contain
+  values that count down toward zero and represent the number of
+  retries and redirects remaining, respectively.
+
+  @examples[
+  (define oauth-middleware
+    (make-keyword-procedure
+     (lambda (kws kw-args u k . args)
+       (match (keyword-apply k kws kw-args u args)
+         [(response #:status-code 401)
+          (code:comment "perform token refresh; then retry")
+          (keyword-apply k kws kw-args u args)]
+         [resp resp]))))
+  ]
+}
+
+@defthing[
+  middleware-continuation/c
+  (-> url?
+      #:method method/c
+      #:headers headers/c
+      #:params query-params/c
+      #:auth (or/c #f auth-procedure/c)
+      #:data (or/c #f bytes? string? input-port? payload-procedure/c)
+      #:history (listof response?)
+      #:attempts exact-nonnegative-integer?
+      #:redirects exact-nonnegative-integer?
+      response?)]{
+  The contract for the procedure that is passed to a @tech{middleware
+  procedure} that performs the request.
+}
+
+@defproc[(compose-middleware [m middleware/c] ...+) middleware/c]{
+  Produces a new @tech{middleware procedure} by composing the provided
+  middleware from left to right.
+}
+
 
 @subsection{Responses}
 
@@ -525,7 +606,7 @@ scheme and url-encode the path to the socket as the host.
 }
 
 @defproc[(response-headers-ref [r response?]
-                               [h symbol?]) (or/c false/c bytes?)]{
+                               [h symbol?]) (or/c #f bytes?)]{
 
   Looks up the first response header whose name is @racket[h].  Header
   names are normalized to lower case.
@@ -809,7 +890,7 @@ loop iterations exceeds 60 seconds.
           (loop))))))
 ]
 
-@defthing[timeout/c (or/c false/c (and/c real? positive?))]{
+@defthing[timeout/c (or/c #f (and/c real? positive?))]{
   The contract for timeout values.  All timeout values represent seconds.
 }
 

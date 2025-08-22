@@ -14,6 +14,7 @@
          "contract.rkt"
          "error.rkt"
          "logger.rkt"
+         "middleware.rkt"
          "payload.rkt"
          "pool.rkt"
          "proxy.rkt"
@@ -36,7 +37,8 @@
         [#:pool-config pool-config?
          #:ssl-context (or/c #f ssl-client-context? (promise/c ssl-client-context?))
          #:cookie-jar (or/c #f (is-a?/c cookie-jar<%>))
-         #:proxies (listof proxy?)]
+         #:proxies (listof proxy?)
+         #:middleware (or/c #f middleware/c)]
         session?)]
   [session?
    (-> any/c boolean?)]
@@ -75,6 +77,7 @@
    ssl-ctx
    cookies
    proxies
+   middleware
    [closed? #:mutable])
   #:transparent)
 
@@ -82,7 +85,8 @@
          #:pool-config [conf (make-pool-config)]
          #:ssl-context [ssl-ctx (delay/sync (ssl-secure-client-context))]
          #:cookie-jar [cookies #f]
-         #:proxies [proxies null])
+         #:proxies [proxies null]
+         #:middleware [middleware #f])
   (define the-session
     (session
      #;cust (make-custodian)
@@ -92,6 +96,7 @@
      #;ssql-ctx ssl-ctx
      #;cookies cookies
      #;proxies proxies
+     #;middleware middleware
      #;closed? #f))
   (will-register executor the-session session-close!)
   (log-http-easy-debug "session opened")
@@ -170,15 +175,16 @@
       [(supplied? json) (json-payload json)]
       [else data]))
 
-  (define (go u
-              #:method [method method] ;; noqa
-              #:headers [headers headers] ;; noqa
-              #:params [params params] ;; noqa
-              #:auth [auth auth] ;; noqa
-              #:data [data the-data] ;; noqa
-              #:history [history null]
-              #:attempts [attempts-remaining max-attempts]
-              #:redirects [redirects-remaining max-redirects])
+  (define (go
+           #:method method ;; noqa
+           #:headers headers ;; noqa
+           #:params params ;; noqa
+           #:auth auth ;; noqa
+           #:data data ;; noqa
+           #:history history
+           #:attempts attempts-remaining
+           #:redirects redirects-remaining
+           u)
     (let*-values ([(headers) (hash-set headers 'user-agent user-agent)]
                   [(headers) (maybe-add-cookie-header sess u headers)]
                   [(headers params)
@@ -209,7 +215,16 @@
                                [(positive? attempts-remaining)
                                 (log-http-easy-debug "retrying~n  attempts remaining: ~a" (sub1 attempts-remaining))
                                 (parameterize-break enable-breaks?
-                                  (go u #:attempts (sub1 attempts-remaining) #:history history))]
+                                  (go+middleware
+                                   u
+                                   #:method method
+                                   #:headers headers
+                                   #:params params
+                                   #:auth auth
+                                   #:data data
+                                   #:history history
+                                   #:attempts (sub1 attempts-remaining)
+                                   #:redirects redirects-remaining))]
                                [else
                                 (log-http-easy-warning "out of retries; bubbling up exception")
                                 (raise e)]))])
@@ -280,14 +295,18 @@
              (response-drain! resp (timeout-config-request timeouts))
              (response-close! resp)
              (parameterize-break enable-breaks?
-               (go dest-url
-                   #:method (case (response-status-code resp)
-                              [(301 302 303) 'get]
-                              [(307 308)     method])
-                   #:headers (hash-remove headers 'authorization)
-                   #:auth (and (same-origin? dest-url u) auth)
-                   #:history (cons resp history)
-                   #:redirects (sub1 redirects-remaining)))]
+               (go+middleware
+                dest-url
+                #:method (case (response-status-code resp)
+                           [(301 302 303) 'get]
+                           [(307 308)     method])
+                #:headers (hash-remove headers 'authorization)
+                #:params params
+                #:auth (and (same-origin? dest-url u) auth)
+                #:data data
+                #:history (cons resp history)
+                #:attempts attempts-remaining
+                #:redirects (sub1 redirects-remaining)))]
             [(or close? (not stream?))
              (response-drain! resp (timeout-config-request timeouts))
              (response-close! resp)
@@ -298,7 +317,25 @@
              (will-register executor resp response-close!)
              resp])))))
 
-  (go (->url urlish)))
+  (define go+middleware
+    (cond
+      [(session-middleware sess)
+       => (lambda (m)
+            (make-keyword-procedure
+             (lambda (kws kw-args u . args)
+               (keyword-apply m kws kw-args u go args))))]
+      [else go]))
+
+  (go+middleware
+   (->url urlish)
+   #:method method
+   #:headers headers
+   #:params params
+   #:auth auth
+   #:data the-data
+   #:history null
+   #:attempts max-attempts
+   #:redirects max-redirects))
 
 ;; https://www.rfc-editor.org/rfc/rfc2616#section-14.30
 (define (ensure-absolute-url orig location)
