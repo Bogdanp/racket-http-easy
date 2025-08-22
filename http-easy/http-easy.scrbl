@@ -486,7 +486,7 @@ scheme and url-encode the path to the socket as the host.
 
 A @deftech{middleware procedure} may be used to customize the request
 processing behavior of a @tech{session}. For example, you can use
-middleware to track telemetry about requests. Or, you can use it
+middleware to track telemetry about requests. Or, you can use them
 implement OAuth re-authorization flows.
 
 @history[#:added "0.11"]
@@ -679,7 +679,7 @@ implement OAuth re-authorization flows.
   than @racket[t] seconds.
 
   @history[
-   #:changed "0.9" @elem{Added the @racket[#t] argument.}
+   #:changed "0.9" @elem{Added the @racket[t] argument.}
   ]
 }
 
