@@ -476,7 +476,15 @@
      (test-case "handles RST"
        (match-define (list stdout stdin _pid stderr _control)
          (parameterize ([subprocess-group-enabled #t])
-           (process* (find-system-path 'exec-file) "-l" "tests/net/http-client/rst-server" "full")))
+           ;; The package server sets PLTSTDOUT to display GC logs, so
+           ;; pass -W and -O here to ensure they're not displayed by
+           ;; the subprocess.
+           (process*
+            (find-system-path 'exec-file)
+            "-W" "error"
+            "-O" "error"
+            "-l" "tests/net/http-client/rst-server"
+            "full")))
        (match (read-line stdout)
          [(regexp #rx"PORT: (.+)" (list _ (app string->number port)))
           (define stderr-thd (thread (lambda () (copy-port stderr (current-error-port)))))
