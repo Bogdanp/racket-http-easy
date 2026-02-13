@@ -206,7 +206,12 @@
                              (raise e))]
                           [exn:fail?
                            (lambda (e)
-                             (log-http-easy-warning "request failed: ~a" (exn-message e))
+                             (log-http-easy-warning
+                              "request failed: ~a~n  scheme: ~s~n  host: ~s~n  port: ~s"
+                              (exn-message e)
+                              (url-scheme u)
+                              (url-host u)
+                              (url-port u))
                              (session-abandon sess u conn)
                              (cond
                                [(exn:fail:http-easy? e)
