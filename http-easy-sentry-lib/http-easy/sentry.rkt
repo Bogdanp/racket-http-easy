@@ -10,10 +10,13 @@
 (provide
  make-tracing-middleware)
 
-(define (make-tracing-middleware sentry)
+(define (make-tracing-middleware [sentry current-sentry])
   (make-keyword-procedure
    (lambda (kws kw-args u k . args)
-     (parameterize ([current-sentry sentry])
+     (parameterize ([current-sentry
+                     (if (procedure? sentry)
+                         (sentry)
+                         sentry)])
        (define method (kw-ref kws kw-args '#:method))
        (define params (kw-ref kws kw-args '#:params))
        (define method-str (string-upcase (symbol->string method)))
