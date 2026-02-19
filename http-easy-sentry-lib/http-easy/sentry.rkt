@@ -50,7 +50,9 @@
           (span-set! s 'http.response.status_code (response-status-code res))
           (cond
             [(response-headers-ref res 'content-length)
-             => (λ (len) (span-set! s 'http.response_content_length len))]
+             => (λ (len-bs)
+                  (define len (string->number (bytes->string/utf-8 len-bs)))
+                  (span-set! s 'http.response_content_length len))]
             [(response-closed? res)
              (define len (bytes-length (response-body res)))
              (span-set! s 'http.response_content_length len)]
