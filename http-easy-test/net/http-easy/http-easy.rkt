@@ -2,6 +2,7 @@
 
 (require json
          net/cookies
+         (only-in net/http-client http-conn-open!)
          net/http-easy
          net/http-easy/middleware
          net/url
@@ -28,6 +29,7 @@
                   request-bindings/raw
                   request-headers/raw
                   request-post-data/raw
+                  request-uri
                   response/empty
                   response/jsexpr
                   response/output
@@ -37,6 +39,11 @@
 
 (provide
  http-easy-tests)
+
+(define (echo-uri req)
+  (response/output
+   (lambda (out)
+     (display (url->string (request-uri req)) out))))
 
 (define http-easy-tests
   (test-suite
@@ -203,6 +210,74 @@
             (check-equal?
              (response-status-code (get addr #:max-redirects 1))
              302)))))
+
+     (test-case "relative redirects"
+       (define-values (dispatch _)
+         (dispatch-rules
+          [((string-arg) "start")
+           (lambda (req _directory)
+             (define binds (request-bindings/raw req))
+             (let* ([dest (bindings-assq #"dest" binds)]
+                    [dest (and dest (binding:form-value dest))])
+               (if dest
+                   (redirect-to (bytes->string/utf-8 dest))
+                   (redirect-to "get"))))]
+          [else
+           (lambda (req)
+             (echo-uri req))]))
+
+       (call-with-web-server
+        dispatch
+        (lambda (addr)
+          (define start (format "~a/a/start" addr))
+          (check-equal? (response-body (get start)) #"/a/get")
+          (check-equal? (response-body (get start #:params `((dest . "/get")))) #"/get")
+          (check-equal? (response-body (get start #:params `((dest . "?dest=/bar")))) #"/bar")
+          (check-equal? (response-body (get start #:params '((dest . "x/../get")))) #"/a/get")
+          (check-equal? (response-body (get start #:params '((dest . ".")))) #"/a/")
+          (check-equal? (response-body (get start #:params '((dest . "x/..")))) #"/a/")
+          (check-equal? (response-body (get (format "~a/a%252Fb/start" addr))) #"/a%252Fb/get"))))
+
+     (test-case "fragment-only redirects preserve the request query"
+       (for ([example (in-list '((""     "1"   #"/?x=1")
+                                 ("#bob" "1"   #"/?x=1")
+                                 ("#bob" "a+b" #"/?x=a%2Bb")))])
+         (match-define (list location value expected) example)
+         (define first-request? #t)
+         (call-with-web-server
+          (lambda (req)
+            (cond
+              [first-request?
+               ;; XXX: redirect-to doesn't allow empty strings
+               (set! first-request? #f)
+               (response/output
+                #:code 302
+                #:message #"Temporary Redirect"
+                #:headers (list (make-header #"Location" (string->bytes/utf-8 location)))
+                void)]
+              [else
+               (echo-uri req)]))
+          (lambda (addr)
+            (define resp (get (format "~a/" addr) #:params `((x . ,value))))
+            (check-equal? (response-body resp) expected)))))
+
+     (test-case "scheme-relative redirects inherit HTTPS"
+       (call-with-web-server
+        (lambda (req)
+          (if (equal? (url->string (request-uri req)) "/start")
+              (redirect-to "//other.example/get")
+              (echo-uri req)))
+        (lambda (addr)
+          (define destinations null)
+          (define proxy
+            (make-proxy
+             (lambda (_) #t)
+             (lambda (conn u _ssl)
+               (set! destinations (cons (url->string u) destinations))
+               (http-conn-open! conn "127.0.0.1" #:port (url-port (string->url addr))))))
+          (parameterize ([current-session (make-session #:proxies (list proxy))])
+            (check-equal? (response-body (get "https://example.org/start")) #"/get")
+            (check-equal? (car destinations) "https://other.example/get")))))
 
      (test-case "303 redirects change the request method to GET"
        (define-values (dispatch _)
@@ -402,6 +477,7 @@
 
      ;; xref: https://chrt.fm/track/E341G/dts.podtrac.com/redirect.mp3/prfx.byspotify.com/e/rss.art19.com/episodes/f441d319-c90a-4632-bed5-5bd3e596018e.mp3?rss_browser=BAhJIg9Qb2RjYXRjaGVyBjoGRVQ%3D--8c940e38b58f38097352f6f4709902a1b7f12844
      (test-case "redirect to location with encoded + in path"
+       (define fragment-sent? #f)
        (call-with-tcp-server
         (lambda (lines out)
           (match (car lines)
@@ -409,12 +485,21 @@
              (fprintf out "HTTP/1.1 302 Found\r\n")
              (fprintf out "Location: /a%2Bb.mp3\r\n")
              (fprintf out "\r\n")]
+            ["GET /chain HTTP/1.1"
+             (fprintf out "HTTP/1.1 302 Found\r\nLocation: /a%2Bb.mp3?q=a%2Bb\r\n\r\n")]
+            ["GET /a%2Bb.mp3?q=a%2Bb HTTP/1.1"
+             (cond
+               [fragment-sent?
+                (fprintf out "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")]
+               [else
+                (set! fragment-sent? #t)
+                (fprintf out "HTTP/1.1 302 Found\r\nLocation: #bob\r\n\r\n")])]
             ["GET /a%2Bb.mp3 HTTP/1.1"
              (fprintf out "HTTP/1.1 200 OK\r\n")
              (fprintf out "Content-Length: 2\r\n")
              (fprintf out "\r\n")
              (fprintf out "ok")]
-            ["GET /a+b.mp3 HTTP/1.1"
+            [_
              (fprintf out "HTTP/1.1 400 Bad Request\r\n")
              (fprintf out "Content-Length: 3\r\n")
              (fprintf out "\r\n")
@@ -422,6 +507,7 @@
         (lambda (port)
           (parameterize ([current-session (make-session)])
             (check-equal? (response-body (get (format "http://127.0.0.1:~a" port))) #"ok")
+            (check-equal? (response-body (get (format "http://127.0.0.1:~a/chain" port))) #"ok")
             ;; https://github.com/Bogdanp/racket-http-easy/issues/25
             (check-equal? (response-body (get (string->url/literal (format "http://127.0.0.1:~a/a%2Bb.mp3" port)))) #"ok")))))
 

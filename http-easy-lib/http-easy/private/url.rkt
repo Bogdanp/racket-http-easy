@@ -10,6 +10,7 @@
 (provide
  (struct-out url/literal)
  current-url/literal-query-param-encoder
+ ->url/literal
  string->url/literal
  url/literal->string
  is-percent-encoded?
@@ -32,6 +33,9 @@
 ;; An escape hatch for services that are super non-compliant.
 (define current-url/literal-query-param-encoder
   (make-parameter form-urlencoded-encode))
+
+(define (->url/literal u)
+  (if (url/literal? u) u (string->url/literal (url->string u))))
 
 (define (string->url/literal s)
   (match-define (list _ scheme user ipv6host host port path query fragment)

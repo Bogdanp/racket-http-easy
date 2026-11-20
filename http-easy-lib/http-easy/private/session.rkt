@@ -8,6 +8,7 @@
          racket/contract/base
          racket/format
          racket/lazy-require
+         racket/list
          racket/match
          racket/promise
          "common.rkt"
@@ -187,7 +188,7 @@
            u)
     (let*-values ([(headers) (hash-set headers 'user-agent user-agent)]
                   [(headers) (maybe-add-cookie-header sess u headers)]
-                  [(headers params)
+                  [(headers params+auth)
                    (if auth
                        (auth u headers params)
                        (values headers params))]
@@ -242,7 +243,7 @@
                                  [exn:fail? (λ (e) (channel-put resp-ch e))])
                    (define-values (resp-status resp-headers resp-output)
                      (http-conn-sendrecv!
-                      conn (url-request-uri u params)
+                      conn (url-request-uri u params+auth)
                       #:close? close?
                       #:method (method->bytes method)
                       #:headers (headers->list headers)
@@ -295,7 +296,8 @@
           (cond
             [(and (positive? redirects-remaining) (redirect? resp))
              (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
-             (define dest-url (ensure-absolute-url u location))
+             (define u+params (append-query-params u params))
+             (define dest-url (ensure-absolute-url u+params location))
              (log-http-easy-debug "following ~s redirect to ~s" (response-status-code resp) location)
              (response-drain! resp (timeout-config-request timeouts))
              (response-close! resp)
@@ -306,7 +308,7 @@
                            [(301 302 303) 'get]
                            [(307 308)     method])
                 #:headers (hash-remove headers 'authorization)
-                #:params params
+                #:params null
                 #:auth (and (same-origin? dest-url u) auth)
                 #:data data
                 #:history (cons resp history)
@@ -342,19 +344,53 @@
    #:attempts max-attempts
    #:redirects max-redirects))
 
-;; https://www.rfc-editor.org/rfc/rfc2616#section-14.30
-(define (ensure-absolute-url orig location)
-  (define location-url
-    (string->url/literal location))
+(define (append-query-params u params)
   (cond
-    [(url-host location-url)
-     location-url]
-    [(not (url-path-absolute? location-url))
-     (error 'ensure-absolute-url "Location destination is relative")]
-    [else
-     (match-define (url scheme user host port _ _ _ _) orig)
-     (match-define (url _ _ _ _ _ path query fragment) location-url)
-     (url/literal scheme user host port #t path query fragment)]))
+    [(null? params) u]
+    [(url/literal? u) (struct-copy url/literal u [query #:parent url (append (url-query u) params)])]
+    [else (struct-copy url u [query (append (url-query u) params)])]))
+
+;; : (or/c url? url/literal?) string? -> url/literal?
+;; https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.2
+(define (ensure-absolute-url base location)
+  (let ([base (->url/literal base)])
+    (define location-url (string->url/literal location))
+    (match-define (url scheme user host port _ orig-path _ orig-fragment) base)
+    (match-define (url location-scheme _ _ _ _ location-path location-query fragment) location-url)
+    (let ([fragment (or fragment orig-fragment)])
+      (cond
+        [(or (url-scheme location-url)
+             (url-host location-url))
+         (struct-copy
+          url/literal location-url
+          [scheme #:parent url (or location-scheme scheme)]
+          [fragment #:parent url fragment])]
+        [(not (url-path-absolute? location-url))
+         (cond
+           [(equal? location "") base]
+           [(fragment-only? location-url)
+            (struct-copy
+             url/literal base
+             [fragment #:parent url fragment])]
+           [else
+            (define resolved-path
+              (if (null? location-path)
+                  orig-path
+                  (resolve-relative-path
+                   (if (pair? orig-path)
+                       (drop-right orig-path 1)
+                       orig-path)
+                   location-path)))
+            (url/literal scheme user host port #t resolved-path location-query fragment)])]
+        [else
+         (url/literal scheme user host port #t location-path location-query fragment)]))))
+
+(define (fragment-only? u)
+  (match-define (url _ user _ _ _ path query fragment) u)
+  (and fragment
+       (not user)
+       (null? path)
+       (null? query)))
 
 (define (same-origin? a b)
   (and
@@ -367,6 +403,22 @@
    (equal?
     (url-port a)
     (url-port b))))
+
+(define directory-path
+  (list (path/param "" null)))
+
+(define (resolve-relative-path dirpath relpath)
+  (match relpath
+    [`() dirpath]
+    [`(,(path/param 'up _) . ,subpath)
+     (define parent (if (null? dirpath) dirpath (drop-right dirpath 1)))
+     (resolve-relative-path parent (if (null? subpath) directory-path subpath))]
+    [`(,(path/param 'same _) . ,subpath)
+     (if (null? subpath)
+         (resolve-relative-path (append dirpath directory-path) subpath)
+         (resolve-relative-path dirpath subpath))]
+    [`(,a-path/param . ,subpath)
+     (resolve-relative-path (append dirpath (list a-path/param)) subpath)]))
 
 (define (redirect? resp)
   (and (memv (response-status-code resp) '(301 302 303 307 308))
