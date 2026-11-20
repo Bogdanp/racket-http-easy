@@ -406,18 +406,23 @@
     (url-port a)
     (url-port b))))
 
-(define directory-path
+(define empty-path-segment
   (list (path/param "" null)))
 
+;; When relpath has a trailing 'up or 'same, whe have to ensure that the
+;; resolved path is a directory path.
 (define (resolve-relative-path dirpath relpath)
   (match relpath
     [`() dirpath]
     [`(,(path/param 'up _) . ,subpath)
-     (define parent (drop-last dirpath))
-     (resolve-relative-path parent (if (null? subpath) directory-path subpath))]
+     (define parent
+       (drop-last dirpath))
+     (if (null? subpath)
+         (resolve-relative-path parent empty-path-segment)
+         (resolve-relative-path parent subpath))]
     [`(,(path/param 'same _) . ,subpath)
      (if (null? subpath)
-         (resolve-relative-path (append dirpath directory-path) subpath)
+         (resolve-relative-path (append dirpath empty-path-segment) subpath)
          (resolve-relative-path dirpath subpath))]
     [`(,a-path/param . ,subpath)
      (resolve-relative-path (append dirpath (list a-path/param)) subpath)]))
