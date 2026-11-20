@@ -345,10 +345,11 @@
    #:redirects max-redirects))
 
 (define (append-query-params u params)
-  (cond
-    [(null? params) u]
-    [(url/literal? u) (struct-copy url/literal u [query #:parent url (append (url-query u) params)])]
-    [else (struct-copy url u [query (append (url-query u) params)])]))
+  (define query
+    (append (url-query u) params))
+  (if (url/literal? u)
+      (struct-copy url/literal u [query #:parent url query])
+      (struct-copy url u [query query])))
 
 ;; : (or/c url? url/literal?) string? -> url/literal?
 ;; https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.2
