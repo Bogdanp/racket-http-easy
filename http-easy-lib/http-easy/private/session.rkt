@@ -344,6 +344,9 @@
    #:attempts max-attempts
    #:redirects max-redirects))
 
+(define (drop-last lst)
+  (if (pair? lst) (drop-right lst 1) lst))
+
 (define (append-query-params u params)
   (define query
     (append (url-query u) params))
@@ -378,9 +381,7 @@
               (if (null? location-path)
                   orig-path
                   (resolve-relative-path
-                   (if (pair? orig-path)
-                       (drop-right orig-path 1)
-                       orig-path)
+                   (drop-last orig-path)
                    location-path)))
             (url/literal scheme user host port #t resolved-path location-query fragment)])]
         [else
@@ -412,7 +413,7 @@
   (match relpath
     [`() dirpath]
     [`(,(path/param 'up _) . ,subpath)
-     (define parent (if (null? dirpath) dirpath (drop-right dirpath 1)))
+     (define parent (drop-last dirpath))
      (resolve-relative-path parent (if (null? subpath) directory-path subpath))]
     [`(,(path/param 'same _) . ,subpath)
      (if (null? subpath)
