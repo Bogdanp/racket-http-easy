@@ -403,8 +403,8 @@
     (url-host a)
     (url-host b))
    (equal?
-    (url-port a)
-    (url-port b))))
+    (url-port* a)
+    (url-port* b))))
 
 (define empty-path-segment
   (list (path/param "" null)))

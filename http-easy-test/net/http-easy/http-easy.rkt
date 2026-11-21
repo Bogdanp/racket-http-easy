@@ -342,6 +342,26 @@
           (check-equal? (response-body (post (format "~a/307" addr))) #"hello")
           (check-equal? (response-body (delete (format "~a/308" addr))) #"goodbye"))))
 
+     (test-case "redirects to the explicit default HTTPS port retain auth"
+       (call-with-web-server
+        (lambda (req)
+          (if (equal? (url->string (request-uri req)) "/start")
+              (redirect-to "https://example.org:443/end")
+              (response/output
+               (lambda (out)
+                 (define auth (headers-assq* #"authorization" (request-headers/raw req)))
+                 (write (and auth (header-value auth)) out)))))
+        (lambda (addr)
+          (define proxy
+            (make-proxy
+             (lambda (_) #t)
+             (lambda (conn _u _ssl)
+               (http-conn-open! conn "127.0.0.1" #:port (url-port (string->url addr))))))
+          (parameterize ([current-session (make-session #:proxies (list proxy))])
+            (check-equal?
+             (read-response (get "https://example.org/start" #:stream? #t #:auth (bearer-auth "token")))
+             #"Bearer token")))))
+
      (test-case "redirects to other origins discard auth"
        (call-with-web-server
         (lambda (req)
