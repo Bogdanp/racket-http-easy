@@ -39,7 +39,11 @@
     (define target-host (url-host u))
     (define target-port (or (url-port u) default-port))
     (define-values (ssl-ctx* in out abandon!)
-      (http-conn-CONNECT-tunnel proxy-host proxy-port target-host target-port #:ssl? (ssl-ctx-f ssl-ctx)))
-    (http-conn-open! conn target-host
-                     #:port target-port
-                     #:ssl? (list ssl-ctx* in out abandon!))))
+      (http-conn-CONNECT-tunnel
+       proxy-host proxy-port
+       target-host target-port
+       #:ssl? (ssl-ctx-f ssl-ctx)))
+    (http-conn-open!
+     conn target-host
+     #:port target-port
+     #:ssl? (list ssl-ctx* in out abandon!))))

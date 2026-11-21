@@ -123,7 +123,7 @@
           (call-with-semaphore (session-sema s)
             (lambda ()
               (when (session-closed? s)
-                (error 'session-lease "session closed"))
+                (oops 'http-easy "session closed"))
               (hash-ref!
                pools k
                (lambda ()
@@ -476,10 +476,13 @@
         (or
          (for/first ([p (in-list proxies)] #:when ((proxy-matches? p) u))
            ((proxy-connect! p) conn u ssl-ctx))
-         (http-conn-open!
-          #:port (or port (if (equal? scheme "https") 443 80))
-          #:ssl? (and (equal? scheme "https") ssl-ctx)
-          conn host))])])
+         (and
+          (member scheme '(#f "http" "https"))
+          (http-conn-open!
+           #:port (or port (if (equal? scheme "https") 443 80))
+           #:ssl? (and (equal? scheme "https") ssl-ctx)
+           conn host))
+         (oops 'http-easy "unsupported scheme: ~a" scheme))])])
   conn)
 
 (define (headers->list headers)

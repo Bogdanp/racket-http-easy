@@ -229,7 +229,13 @@
        (call-with-web-server
         dispatch
         (lambda (addr)
-          (define start (format "~a/a/start" addr))
+          (define start
+            (format "~a/a/start" addr))
+          (check-exn
+           #rx"unsupported scheme: ftp"
+           (lambda ()
+             (define dest (format "~a/get" (regexp-replace #rx"^https?" addr "ftp")))
+             (get start #:params `((dest . ,dest)))))
           (check-equal? (response-body (get start)) #"/a/get")
           (check-equal? (response-body (get start #:params `((dest . "/get")))) #"/get")
           (check-equal? (response-body (get start #:params `((dest . "?dest=/bar")))) #"/bar")
@@ -666,7 +672,7 @@
        (define s (make-session))
        (session-close! s)
        (check-exn
-        #rx"session-lease: session closed"
+        #rx"http-easy: session closed"
         (lambda ()
           (session-request s "https://example.com")))))
 
