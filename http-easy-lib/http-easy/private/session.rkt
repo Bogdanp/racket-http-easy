@@ -375,34 +375,35 @@
 ;; https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.2
 (define (ensure-absolute-url base location)
   (let ([base (->url/literal base)])
-    (define location-url (string->url/literal location))
+    (define loc-url (string->url/literal location))
     (match-define (url scheme user host port _ orig-path _ orig-fragment) base)
-    (match-define (url location-scheme _ _ _ _ location-path location-query fragment) location-url)
+    (match-define (url loc-scheme _ loc-host _ _ loc-path loc-query fragment) loc-url)
     (let ([fragment (or fragment orig-fragment)])
       (cond
-        [(or (url-scheme location-url)
-             (url-host location-url))
+        [(or loc-scheme loc-host)
          (struct-copy
-          url/literal location-url
-          [scheme #:parent url (or location-scheme scheme)]
+          url/literal loc-url
+          [scheme #:parent url (or loc-scheme scheme)]
+          [path #:parent url (resolve-path loc-path)]
           [fragment #:parent url fragment])]
-        [(not (url-path-absolute? location-url))
+        [(not (url-path-absolute? loc-url))
          (cond
            [(equal? location "") base]
-           [(fragment-only? location-url)
+           [(fragment-only? loc-url)
             (struct-copy
              url/literal base
              [fragment #:parent url fragment])]
            [else
             (define resolved-path
-              (if (null? location-path)
+              (if (null? loc-path)
                   orig-path
-                  (resolve-relative-path
-                   (drop-last orig-path)
-                   location-path)))
-            (url/literal scheme user host port #t resolved-path location-query fragment)])]
+                  (resolve-path
+                   (append (drop-last orig-path) loc-path))))
+            (url/literal scheme user host port #t resolved-path loc-query fragment)])]
         [else
-         (url/literal scheme user host port #t location-path location-query fragment)]))))
+         (define resolved-path
+           (resolve-path loc-path))
+         (url/literal scheme user host port #t resolved-path loc-query fragment)]))))
 
 (define (fragment-only? u)
   (match-define (url _ user _ _ _ path query fragment) u)
@@ -424,25 +425,29 @@
     (url-port* b))))
 
 (define empty-path-segment
-  (list (path/param "" null)))
+  (path/param "" null))
 
-;; When relpath has a trailing 'up or 'same, whe have to ensure that the
+;; When path has a trailing 'up or 'same, whe have to ensure that the
 ;; resolved path is a directory path.
-(define (resolve-relative-path dirpath relpath)
-  (match relpath
-    [`() dirpath]
-    [`(,(path/param 'up '()) . ,subpath)
-     (define parent
-       (drop-last dirpath))
-     (if (null? subpath)
-         (resolve-relative-path parent empty-path-segment)
-         (resolve-relative-path parent subpath))]
-    [`(,(path/param 'same '()) . ,subpath)
-     (if (null? subpath)
-         (resolve-relative-path (append dirpath empty-path-segment) subpath)
-         (resolve-relative-path dirpath subpath))]
-    [`(,a-path/param . ,subpath)
-     (resolve-relative-path (append dirpath (list a-path/param)) subpath)]))
+(define (resolve-path path)
+  (let loop ([resolved null]
+             [segments path])
+    (match segments
+      [`() (reverse resolved)]
+      [`(,(path/param 'up '()) . ,segments)
+       (define parent
+         (cond
+           [(null? resolved) resolved]
+           [else (cdr resolved)]))
+       (if (null? segments)
+           (loop (cons empty-path-segment parent) segments)
+           (loop parent segments))]
+      [`(,(path/param 'same '()) . ,segments)
+       (if (null? segments)
+           (loop (cons empty-path-segment resolved) segments)
+           (loop resolved segments))]
+      [`(,a-path/param . ,segments)
+       (loop (cons a-path/param resolved) segments)])))
 
 (define (redirect? resp)
   (and (memv (response-status-code resp) '(301 302 303 307 308))

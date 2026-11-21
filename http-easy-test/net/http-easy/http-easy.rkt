@@ -212,19 +212,12 @@
              302)))))
 
      (test-case "relative redirects"
-       (define-values (dispatch _)
-         (dispatch-rules
-          [((string-arg) "start")
-           (lambda (req _directory)
-             (define binds (request-bindings/raw req))
-             (let* ([dest (bindings-assq #"dest" binds)]
-                    [dest (and dest (binding:form-value dest))])
-               (if dest
-                   (redirect-to (bytes->string/utf-8 dest))
-                   (redirect-to "get"))))]
-          [else
-           (lambda (req)
-             (echo-uri req))]))
+       (define (dispatch req)
+         (match (url-path (request-uri req))
+           [(list _ ... (path/param "start" '())) ;; noqa
+            (define dest (bindings-assq #"dest" (request-bindings/raw req)))
+            (redirect-to (if dest (bytes->string/utf-8 (binding:form-value dest)) "get"))]
+           [_ (echo-uri req)]))
 
        (call-with-web-server
         dispatch
@@ -243,6 +236,13 @@
           (check-equal? (response-body (get start #:params '((dest . "x/..;v/get")))) #"/a/x/..;v/get")
           (check-equal? (response-body (get start #:params '((dest . ".")))) #"/a/")
           (check-equal? (response-body (get start #:params '((dest . "x/..")))) #"/a/")
+          (check-equal? (response-body (get start #:params '((dest . "/a/b/..")))) #"/a/")
+          (check-equal? (response-body (get start #:params '((dest . "/..")))) #"/")
+          (check-equal? (response-body (get (format "~a/a/b/../start" addr) #:params '((dest . "../get")))) #"/get")
+          (define absolute-dest (format "~a/x/../get" addr))
+          (define scheme-relative-dest (regexp-replace #rx"^http:" absolute-dest ""))
+          (check-equal? (response-body (get start #:params `((dest . ,absolute-dest)))) #"/get")
+          (check-equal? (response-body (get start #:params `((dest . ,scheme-relative-dest)))) #"/get")
           (check-equal? (response-body (get (format "~a/a%252Fb/start" addr))) #"/a%252Fb/get"))))
 
      (test-case "fragment-only redirects preserve the request query"
