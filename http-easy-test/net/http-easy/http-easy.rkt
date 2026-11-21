@@ -287,7 +287,7 @@
             (check-equal? (car destinations) "https://other.example/get")))))
 
      ;; xref: https://github.com/racket/racket/commit/4598ec50a5ba6c7e8d2142c242049edfbfa53f1e
-     (when (version<=? "8.16" (version))
+     (when (version<=? "8.17" (version))
        (test-case "303 redirects change POST to GET and drop the payload and its headers"
          (define-values (dispatch _)
            (dispatch-rules
