@@ -234,6 +234,7 @@
           (check-equal? (response-body (get start #:params `((dest . "/get")))) #"/get")
           (check-equal? (response-body (get start #:params `((dest . "?dest=/bar")))) #"/bar")
           (check-equal? (response-body (get start #:params '((dest . "x/../get")))) #"/a/get")
+          (check-equal? (response-body (get start #:params '((dest . "x/..;v/get")))) #"/a/x/..;v/get")
           (check-equal? (response-body (get start #:params '((dest . ".")))) #"/a/")
           (check-equal? (response-body (get start #:params '((dest . "x/..")))) #"/a/")
           (check-equal? (response-body (get (format "~a/a%252Fb/start" addr))) #"/a%252Fb/get"))))

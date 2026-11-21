@@ -414,13 +414,13 @@
 (define (resolve-relative-path dirpath relpath)
   (match relpath
     [`() dirpath]
-    [`(,(path/param 'up _) . ,subpath)
+    [`(,(path/param 'up '()) . ,subpath)
      (define parent
        (drop-last dirpath))
      (if (null? subpath)
          (resolve-relative-path parent empty-path-segment)
          (resolve-relative-path parent subpath))]
-    [`(,(path/param 'same _) . ,subpath)
+    [`(,(path/param 'same '()) . ,subpath)
      (if (null? subpath)
          (resolve-relative-path (append dirpath empty-path-segment) subpath)
          (resolve-relative-path dirpath subpath))]
