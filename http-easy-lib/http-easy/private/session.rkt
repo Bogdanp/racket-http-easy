@@ -295,6 +295,16 @@
                            (raise e))])
           (cond
             [(and (positive? redirects-remaining) (redirect? resp))
+             (define redirect-method
+               (case (response-status-code resp)
+                 [(301 302 303) 'get]
+                 [(307 308)     method]))
+             (define same-method?
+               (equal? method redirect-method))
+             (define redirect-headers
+               (if same-method?
+                   (remove-headers headers 'authorization)
+                   (remove-headers headers 'authorization 'content-encoding 'content-length 'content-type 'transfer-encoding)))
              (define location (bytes->string/utf-8 (response-headers-ref resp 'location)))
              (define u+params (append-query-params u params))
              (define dest-url (ensure-absolute-url u+params location))
@@ -304,13 +314,11 @@
              (parameterize-break enable-breaks?
                (go+middleware
                 dest-url
-                #:method (case (response-status-code resp)
-                           [(301 302 303) 'get]
-                           [(307 308)     method])
-                #:headers (hash-remove headers 'authorization)
+                #:method redirect-method
+                #:headers redirect-headers
                 #:params null
                 #:auth (and (same-origin? dest-url u) auth)
-                #:data data
+                #:data (if same-method? data #f)
                 #:history (cons resp history)
                 #:attempts attempts-remaining
                 #:redirects (sub1 redirects-remaining)))]
@@ -346,6 +354,15 @@
 
 (define (drop-last lst)
   (if (pair? lst) (drop-right lst 1) lst))
+
+(define (remove-headers ht . ids)
+  (for/hasheq ([(k v) (in-hash ht)]
+               #:unless (for/or ([id (in-list ids)])
+                          (or (eq? k id)
+                              (string-ci=?
+                               (symbol->string k)
+                               (symbol->string id)))))
+    (values k v)))
 
 (define (append-query-params u params)
   (define query

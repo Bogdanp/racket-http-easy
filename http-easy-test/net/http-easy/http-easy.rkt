@@ -286,7 +286,7 @@
             (check-equal? (response-body (get "https://example.org/start")) #"/get")
             (check-equal? (car destinations) "https://other.example/get")))))
 
-     (test-case "303 redirects change the request method to GET"
+     (test-case "303 redirects change POST to GET and drop the payload and its headers"
        (define-values (dispatch _)
          (dispatch-rules
           [("")
@@ -296,15 +296,20 @@
 
           [("a")
            #:method "get"
-           (lambda (_)
+           (lambda (req)
+             (define headers (request-headers/raw req))
              (response/output
               (lambda (out)
-                (display "hello" out))))]))
+                (write (list (request-post-data/raw req)
+                             (for/list ([name (in-list '(#"content-length" #"content-type"))]
+                                        #:when (headers-assq* name headers))
+                               name))
+                       out))))]))
 
        (call-with-web-server
         dispatch
         (lambda (addr)
-          (check-equal? (response-body (post addr)) #"hello"))))
+          (check-equal? (read-response (post addr #:stream? #t #:json (hasheq 'x 1))) '(#f ())))))
 
      (test-case "30[78] redirects preserve the request method"
        (define-values (dispatch _)
