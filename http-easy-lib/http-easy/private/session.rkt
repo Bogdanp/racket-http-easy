@@ -311,10 +311,14 @@
             [(and (positive? redirects-remaining) (redirect? resp))
              (define redirect-method
                (case (response-status-code resp)
-                 [(301 302 303) 'get]
-                 [(307 308)     method]))
+                 [(301 302 303)
+                  (case method
+                    [(get GET head HEAD) method]
+                    [else 'get])]
+                 [(307 308)
+                  method]))
              (define same-method?
-               (equal? method redirect-method))
+               (eq? method redirect-method))
              (define redirect-headers
                (if same-method?
                    (remove-headers headers 'authorization)
