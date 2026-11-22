@@ -1,7 +1,7 @@
 #lang info
 
 (define license 'BSD-3-Clause)
-(define version "0.11.3")
+(define version "0.11.4")
 (define collection "net")
 (define deps
   '(["base" #:version "8.1.0.4"]
