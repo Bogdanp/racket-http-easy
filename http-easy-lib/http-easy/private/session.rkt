@@ -196,6 +196,9 @@
                    (if (procedure? data)
                        (data headers)
                        (values headers data))])
+      (define start-position
+        (and (input-port? data)
+             (file-position* data)))
       (parameterize-break #f
         (define conn
           (session-lease sess u timeouts))
@@ -311,6 +314,16 @@
              (log-http-easy-debug "following ~s redirect to ~s" (response-status-code resp) location)
              (response-drain! resp (timeout-config-request timeouts))
              (response-close! resp)
+             ;; If the data is an input port, rewind to the original
+             ;; position before sending it with the redirect request.
+             (when (and same-method? (input-port? data))
+               (define message "cannot rewind data for redirect")
+               (unless start-position
+                 (oops 'http-easy message))
+               (with-handlers* ([exn:fail?
+                                 (lambda (e)
+                                   (oops 'http-easy "~a~n original error: ~a" message (exn-message e)))])
+                 (file-position data start-position)))
              (parameterize-break enable-breaks?
                (go+middleware
                 dest-url

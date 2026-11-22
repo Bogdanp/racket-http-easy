@@ -349,6 +349,32 @@
           (check-equal? (response-body (post (format "~a/307" addr))) #"hello")
           (check-equal? (response-body (delete (format "~a/308" addr))) #"goodbye"))))
 
+     (test-case "307 redirects replay a port from its initial position or raise an error"
+       (define bodies null)
+       (call-with-web-server
+        (lambda (req)
+          (set! bodies (cons (request-post-data/raw req) bodies))
+          (if (equal? (url->string (request-uri req)) "/start")
+              (redirect-to "/end" temporarily/same-method)
+              (response/empty)))
+        (lambda (addr)
+          (define start (format "~a/start" addr))
+          (define body (open-input-bytes #"prefix-body"))
+          (file-position body 7)
+          (check-equal? (response-status-code (post start #:data body)) 204)
+          (check-equal? bodies '(#"body" #"body"))
+          (set! bodies null)
+          (define-values (in out)
+            (make-pipe))
+          (write-bytes #"stream" out)
+          (close-output-port out)
+          (check-exn
+           #rx"cannot rewind data"
+           (lambda ()
+             (post start #:data in)))
+          (check-equal? bodies '(#"stream"))
+          (close-input-port in))))
+
      (test-case "redirects to the explicit default HTTPS port retain auth"
        (call-with-web-server
         (lambda (req)
